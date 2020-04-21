@@ -4,10 +4,12 @@
 
 ##### Requires: 
 
-`libc++-10-dev`, `libc++abi-10-dev`
+`clang-10`, `libc++-10-dev`, `libc++abi-10-dev`
 
 Ubuntu:
 https://apt.llvm.org/
+
+Under `Install (stable branch)`
 
 Centos:
 
@@ -15,6 +17,11 @@ Centos:
 `clang++-10 -fPIC -std=c++2a -stdlib=libc++ -c connector.cpp socket.cpp`
 
 ### Windows:
+
+##### Requires: 
+[Clang 10](https://github.com/llvm/llvm-project/releases/download/llvmorg-10.0.0/LLVM-10.0.0-win64.exe), `MSVC 16.6`, `Windows 10 SDK`
+
+MS items available via: [Visual Studio Build tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/).
 
 `clang++ -fPIC -std=c++2a -c connector.cpp socket.cpp`
 
