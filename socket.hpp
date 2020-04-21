@@ -121,5 +121,5 @@ static  bool    SockFinalizeLib         ( void );
 };
 
 // ---------------------------- include inline functions ----------------------
-#include "SocketClient.hxx"
+#include "socket.hxx"
 #endif

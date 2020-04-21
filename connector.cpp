@@ -1,7 +1,5 @@
 #include "connector.h"
-
-#include "SOCK/linuxSock/SocketClient.hpp"
-
+#include "socket.hpp"
 #include "json.hpp"
 /*
 #include <kissnet.hpp>

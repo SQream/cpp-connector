@@ -6,7 +6,7 @@
 #include <winsock.h>
 #endif
 
-#include "SocketClient.hpp"
+#include "socket.hpp"
 
 #include <errno.h>
 #include <openssl/ssl.h>
