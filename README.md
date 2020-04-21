@@ -2,18 +2,18 @@
 
 ### Requirements:
 
-##### Linux: 
+#### Linux: 
 
 `clang-10`, `libc++-10-dev`, `libc++abi-10-dev`
 
-###### Ubuntu:
+##### Ubuntu:
 
 https://apt.llvm.org/  (Under `Install (stable branch)`)
 
-###### Centos:
+##### Centos:
 
 
-##### Windows:
+#### Windows:
 
 [Clang 10](https://github.com/llvm/llvm-project/releases/download/llvmorg-10.0.0/LLVM-10.0.0-win64.exe), `MSVC 16.6`, `Windows 10 SDK`
 
@@ -23,11 +23,11 @@ MS items available via:
 
 
 ### Compilation:
-##### Linux: 
+#### Linux: 
 
 `clang++-10 -fPIC -std=c++2a -stdlib=libc++ -c connector.cpp socket.cpp`
 
-##### Windows:
+#### Windows:
 
 `clang++ -fPIC -std=c++2a -c connector.cpp socket.cpp`
 
