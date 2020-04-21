@@ -6,10 +6,10 @@
 
 `libc++-10-dev`, `libc++abi-10-dev`
 
-For ubuntu:
+Ubuntu:
 https://apt.llvm.org/
 
-For centos:
+Centos:
 
 ##### Compilation command:
 `clang++-10 -fPIC -std=c++2a -stdlib=libc++ -c connector.cpp socket.cpp`
