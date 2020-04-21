@@ -11,3 +11,9 @@ https://apt.llvm.org/
 ### Windows:
 
 `clang++ -fPIC -std=c++2a -c connector.cpp socket.cpp`
+
+
+### Next:
+- Check ssl linkage on Windows
+- Put SSL binaries / code under SSL (or use conan?)
+- Convert socket to hpp / try kissnet
