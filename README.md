@@ -22,7 +22,7 @@ MS items available via:
 [Visual Studio Build tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/)
 
 
-### Compilation commands:
+### Compilation:
 ##### Linux: 
 
 `clang++-10 -fPIC -std=c++2a -stdlib=libc++ -c connector.cpp socket.cpp`
