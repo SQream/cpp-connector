@@ -1,4 +1,4 @@
-#include "SQream-cpp-connector.h"
+#include "connector.h"
 
 #include "SOCK/linuxSock/SocketClient.hpp"
 
