@@ -1,3 +1,11 @@
+/* SQream C++ Connector
+*  Originally by - Benny Van-Zuiden, Jeremy Chetboul, 2018
+*/ 
+
+#include "connector.h"
+#include "socket.hpp"
+#include "json.hpp"
+/*
 #include "connector.h"
 #include "socket.hpp"
 #include "json.hpp"
