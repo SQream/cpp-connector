@@ -32,23 +32,23 @@ Compile directly from the command line, or using [CMake](https://cmake.org/downl
 
 #### Windows
 
-Build connector as a library (dll):
+##### Build connector as a library (dll):
 
 `clang++ -fPIC -std=c++2a  -I X:\..\OpenSSL\include -L X:\..\OpenSSL\lib\*.lib -c connector.cpp`
 
 where -I, -L designate the path to OpenSSL .h folder and .lib files
 
-Generate sample.exe (`-fuse-ld=lld`):
+##### Generate sample.exe:
 
 `clang++ -std=c++2a -fuse-ld=lld -I X:\..\OpenSSL\include -L X:\..\OpenSSL\lib\*.lib -o sample.exe sample.cpp connector.cpp`
 
 #### Linux
 
-Build connector as a library (`-stdlib=libc++` may be ommitted if appropriate `stdlibc++` is present):
+##### Build connector as a library (`-stdlib=libc++` may be ommitted if appropriate `stdlibc++` is present):
 
 `clang++-10 -fPIC -std=c++2a -stdlib=libc++ -c connector.cpp socket.cpp`
 
-Generate sample executable (`-stdlib=libc++`, `-fuse-ld=lld` may be ommitted if appropriate `g++` toolchain is present):
+##### Generate sample executable (`-stdlib=libc++`, `-fuse-ld=lld` may be ommitted if appropriate `g++` toolchain is present):
 
 `clang++-10 -std=c++2a -stdlib=libc++ -fuse-ld=lld -o sample sample.cpp connector.cpp -pthread -lssl -lcrypto`
 
