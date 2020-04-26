@@ -5,10 +5,7 @@
 #include "connector.h"
 #include "socket.hpp"
 #include "json.hpp"
-/*
-#include "connector.h"
-#include "socket.hpp"
-#include "json.hpp"
+
 /*
 #include <kissnet.hpp>
 namespace sock = kissnet;
@@ -251,7 +248,7 @@ bool sqream::connector::reconnect(const std::string &ipv4,int port,int listener_
     host.connect(ipv4,port,ssl_);
     json reply_json;
     rxtx(this,&reply_json,MESSAGES::reconnectDatabase,database_.c_str(),service_.c_str(),connection_id_,username_.c_str(),password_.c_str(),listener_id);
-    return reply_json.contains("databaseConnected") ? true : false;
+    return reply_json.contains("databaseConnected");
 }
 
 bool sqream::connector::open_statement()
@@ -322,7 +319,8 @@ sqream::CONSTS::statement_type sqream::connector::metadata_query(std::vector<col
         retval=CONSTS::statement_type::select;
         columns_metadata_out.resize(queryTypeOut_reply_json["queryTypeNamed"].size());
         const json &out_array = queryTypeOut_reply_json["queryTypeNamed"];
-        for(auto i=0; i<out_array.size() ;i++)
+        auto out_size = out_array.size();
+        for(json::size_type i=0; i<out_size ;i++)
         {
             uint8_t checksum=0;
             if(out_array[i].contains("isTrueVarChar")) columns_metadata_out[i].is_true_varchar = out_array[i]["isTrueVarChar"], checksum|=1;
@@ -398,12 +396,14 @@ size_t sqream::connector::fetch(std::vector<char> &binary_data,std::vector<uint6
             {
                 row_count += int(reply_json["rows"]);
                 const json &array = reply_json["colSzs"];
-                const json::size_type I = array.size();
+                const auto I = array.size();
                 if(column_sizes.size() != I) column_sizes.resize(I);
                 size_t binary_size=0;
-                for(auto i=0; i<I ;i++) binary_size += column_sizes[i] = array[i];
+                for(json::size_type i=0; i<I ;i++) {
+                    binary_size += column_sizes[i] = array[i];
+                }
                 if(binary_size>0)
-                {
+                {       
                     std::vector<char> temp(binary_size);
                     host.read(temp);
                     binary_data.insert(binary_data.end(),temp.begin(),temp.end());
