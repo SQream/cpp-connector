@@ -6,7 +6,7 @@
 OpenSSL 1.1.1+ is used on all platforms
 
 #### Windows
-[Win64 OpenSSL package](https://slproweb.com/products/Win32OpenSSL.html) (the regular, not the light version)
+For an easy install, you can use [Win64 OpenSSL package](https://slproweb.com/products/Win32OpenSSL.html) (the regular, not the light version)
 
 
 ### Header-Only Usage
