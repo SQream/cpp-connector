@@ -34,9 +34,7 @@ https://apt.llvm.org/  (Under `Install (stable branch)`)
 
 [Clang 10](https://github.com/llvm/llvm-project/releases/download/llvmorg-10.0.0/LLVM-10.0.0-win64.exe), `MSVC 16.6`, `Windows 10 SDK`
 
-MS items available via: 
-
-[Visual Studio Build tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/)
+MS items available via [Visual Studio Build tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/)
 
 
 ## Compiling
