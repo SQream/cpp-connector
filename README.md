@@ -9,7 +9,9 @@ OpenSSL 1.1.1+ is used on all platforms
 For an easy install, you can use [Win64 OpenSSL package](https://slproweb.com/products/Win32OpenSSL.html) (the regular, not the light version)
 
 
-### Header-Only Usage
+### Usage
+
+Put those files in the same dir and include `connector.h`:
 
 ```
 connector.h
@@ -17,8 +19,6 @@ connector.cpp
 socket.hpp
 json.hpp
 ```
-
-This usgae type is tested with Clang 10
 
 #### Linux
 
@@ -61,7 +61,7 @@ where -I, -L designate the path to OpenSSL .h folder and .lib files
 
 ### CMake
 
-CMake (3.17.1+) build is tested with ninja as a backend on all platforms. Place the single [Windows binary](https://github.com/ninja-build/ninja/releases/download/v1.10.0/ninja-win.zip) or [Linux binary](https://github.com/ninja-build/ninja/releases/download/v1.10.0/ninja-linux.zip) anywhere in your path to verify a successful build on all supported platforms.
+CMake (3.17.1+) build is tested with ninja as a backend on all platforms. To use with ninja, place the single [Windows binary](https://github.com/ninja-build/ninja/releases/download/v1.10.0/ninja-win.zip) or [Linux binary](https://github.com/ninja-build/ninja/releases/download/v1.10.0/ninja-linux.zip) anywhere in your path.
 
 Sample setup, from the connector folder:
 
