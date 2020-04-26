@@ -22,7 +22,7 @@ This usgae type is tested with Clang 10
 
 #### Linux
 
-`clang-10`, `libc++-10-dev`, `libc++abi-10-dev`
+`clang-10`, `libc++-10-dev`, `libc++abi-10-dev` (or equivalent level `libstc++`)
 
 ##### Ubuntu
 
