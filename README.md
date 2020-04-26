@@ -72,3 +72,4 @@ ninja
 ## Next
 - Mod CMake on Linux / Windows
 - Convert tests to Catch2
+- Clean up socket file
