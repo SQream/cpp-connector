@@ -1,27 +1,30 @@
-cmake_minimum_required(VERSION 3.12)
-project(SQream-cpp-connector)
+CMAKE_MINIMUM_REQUIRED(VERSION 3.17.1)
+set(CMAKE_CXX_STANDARD 20)
 
-if(NOT CMAKE_BUILD_TYPE)
-    set(CMAKE_BUILD_TYPE Release)
+project(connector LANGUAGES CXX DESCRIPTION "SQream C++ connector" HOMEPAGE_URL https://github.com/SQream/cpp-connector)
+
+set(CMAKE_CXX_COMPILER "clang++")
+
+# #[[
+if (MSVC)
+    # warning level 4 and all warnings as errors
+    add_compile_options(/W4 /WX)
+else()
+    # lots of warnings 
+    add_compile_options(-Wall -Wextra -pedantic)  # -Werror - all warnings as errors
 endif()
+#]]
 
-set(DIST_VER "system-default")
+# set(CMAKE_POSITION_INDEPENDENT_CODE ON)   # Set -fPIC on all targets
 
-set(CMAKE_CXX_FLAGS "-fPIC -Wall -Wextra -shared-libgcc -g3")
-set(CMAKE_CXX_FLAGS_DEBUG "-O0")
-set(CMAKE_CXX_FLAGS_RELEASE "-O3 -flto -DNDEBUG")
+include_directories (.)
 
-set(CMAKE_INSTALL_RPATH "$ORIGIN")
-set(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
-set(CMAKE_CXX_STANDARD 11)
+find_package(OpenSSL REQUIRED)
 
-include_directories(/usr/local/sqream-prerequisites/versions/${DIST_VER}/include)
+add_library(connector ./connector.cpp)
+set_property(TARGET connector PROPERTY POSITION_INDEPENDENT_CODE ON)       # -fPIC 
+set_property(TARGET connector PROPERTY INTERPROCEDURAL_OPTIMIZATION TRUE)  # -flto 
 
-link_directories(/usr/local/sqream-prerequisites/versions/${DIST_VER}/lib64 /usr/local/sqream-prerequisites/versions/${DIST_VER}/lib)
 
-add_library(sqream SHARED SQream-cpp-connector.cc)
 
-add_executable(runtime_test runtime_test.cc SQream-cpp-connector.cc SOCK/linuxSock/SocketClient.cpp)
-
-target_link_libraries(runtime_test crypto ssl boost_unit_test_framework pthread)
-
+target_link_libraries(connector PRIVATE OpenSSL::SSL OpenSSL::Crypto)
