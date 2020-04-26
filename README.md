@@ -2,6 +2,25 @@
 
 ## Requirements
 
+### OpenSSL
+OpenSSL 1.1.1+ is required on all Platforms.
+
+#### Windows
+[Win64 OpenSSL package](https://slproweb.com/products/Win32OpenSSL.html) (the regular, not the light version)
+
+
+### Header-Only Usage
+You can include `connector.h` in your code without compiling, by placing these files with your code - 
+
+```
+connector.h
+connector.cpp
+socket.hpp
+json.hpp
+```
+
+This usgae type is tested with Clang 10
+
 #### Linux
 
 `clang-10`, `libc++-10-dev`, `libc++abi-10-dev`
@@ -20,16 +39,10 @@ MS items available via:
 
 [Visual Studio Build tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/)
 
-### OpenSSL
-OpenSSL 1.1.1 is required on all Platforms.
 
-#### Windows
-Install latest [Win64 OpenSSL package](https://slproweb.com/products/Win32OpenSSL.html) (not the "light" version)
+## Compiling
 
-#### Linux
-
-
-## Compilation
+Compile directly from the command line, or using [CMake](https://cmake.org/download/) (3.17.1+) and [ninja](https://ninja-build.org) (1.10.0+)
 
 ### Command Line
 
@@ -45,7 +58,7 @@ where -I, -L designate the path to OpenSSL .h folder and .lib files
 
 ### CMake
 
-CMake build is tested with [ninja](https://ninja-build.org) as a backend([Windows](https://github.com/ninja-build/ninja/releases) [Linux](https://github.com/ninja-build/ninja/wiki/Pre-built-Ninja-packages)
+CMake build is tested with ninja (([Windows](https://github.com/ninja-build/ninja/releases), [Linux](https://github.com/ninja-build/ninja/wiki/Pre-built-Ninja-packages)) as a backend.
 
 Sample setup, from the connector folder:
 
