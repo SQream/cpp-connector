@@ -10,7 +10,7 @@
     + [Linux](#Linux)
   * [CMake](#CMake)
   * [Compile Requirements](#Compile-Requirements)
-    + [Clang 10](#Clang 10)
+    + [Clang 10](#Clang-10)
 - [Usage](#Usage)
 
 
