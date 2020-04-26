@@ -45,11 +45,11 @@ Compile directly from the command line, or using [CMake](https://cmake.org/downl
 
 #### Linux
 
-Build connector as library:
+Build connector as library (`-stdlib=libc++` may be ommitted if appropriate `stdlibc++` is present):
 
 `clang++-10 -fPIC -std=c++2a -stdlib=libc++ -c connector.cpp socket.cpp`
 
-Generate sample executable (`-stdlib=libc++`, `-fuse-ld=lld` may be ommitted):
+Generate sample executable (`-stdlib=libc++`, `-fuse-ld=lld` may be ommitted if appropriate `g++` toolchain is present):
 
 `clang++-10 -std=c++2a -stdlib=libc++ -fuse-ld=lld -o sample sample.cpp connector.cpp -pthread -lssl -lcrypto`
 
