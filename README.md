@@ -1,6 +1,6 @@
 # SQream CPP Connector
 
-## Requirements:
+## Requirements
 
 #### Linux
 
