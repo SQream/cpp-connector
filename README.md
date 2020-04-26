@@ -21,7 +21,7 @@ MS items available via:
 [Visual Studio Build tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/)
 
 ### OpenSSL
-OpenSSL 1.1.1 is require on all Platforms.
+OpenSSL 1.1.1 is required on all Platforms.
 
 #### Windows
 Install latest [Win64 OpenSSL package](https://slproweb.com/products/Win32OpenSSL.html) (not the "light" version)
