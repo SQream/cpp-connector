@@ -3,7 +3,6 @@
 - [Requirements](#Requirements)
   * [OpenSSL](#OpenSSL)
     + [Windows](#Windows)
-    + [Linux](#Linux)
 - [Compiling](#Compiling)
   * [Command Line](#Command-Line])
     + [Windows](#Windows)
