@@ -10,7 +10,6 @@ For an easy install, you can use [Win64 OpenSSL package](https://slproweb.com/pr
 
 
 ### Header-Only Usage
-You can include `connector.h` in your code without compiling, by placing these files with your code - 
 
 ```
 connector.h
@@ -58,7 +57,7 @@ where -I, -L designate the path to OpenSSL .h folder and .lib files
 
 ### CMake
 
-CMake build is tested with ninja (([Windows](https://github.com/ninja-build/ninja/releases), [Linux](https://github.com/ninja-build/ninja/wiki/Pre-built-Ninja-packages)) as a backend.
+CMake (3.17.1+) build is tested with ninja as a backend on all platforms. Just place the single (([Windows binary](https://github.com/ninja-build/ninja/releases/download/v1.10.0/ninja-win.zip) or [Linux binary](https://github.com/ninja-build/ninja/releases/download/v1.10.0/ninja-linux.zip)) anywhere in your path.
 
 Sample setup, from the connector folder:
 
@@ -72,4 +71,5 @@ ninja
 ## Next
 - Mod CMake on Linux / Windows
 - Convert tests to Catch2
+- Merge to hpp
 - Clean up socket file
