@@ -61,7 +61,7 @@ where -I, -L designate the path to OpenSSL .h folder and .lib files
 
 ### CMake
 
-CMake (3.17.1+) build is tested with ninja as a backend on all platforms. Just place the single [Windows binary](https://github.com/ninja-build/ninja/releases/download/v1.10.0/ninja-win.zip) or [Linux binary](https://github.com/ninja-build/ninja/releases/download/v1.10.0/ninja-linux.zip) anywhere in your path.
+CMake (3.17.1+) build is tested with ninja as a backend on all platforms. Place the single [Windows binary](https://github.com/ninja-build/ninja/releases/download/v1.10.0/ninja-win.zip) or [Linux binary](https://github.com/ninja-build/ninja/releases/download/v1.10.0/ninja-linux.zip) anywhere in your path to verify a successful build on all supported platforms.
 
 Sample setup, from the connector folder:
 
