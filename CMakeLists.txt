@@ -4,27 +4,35 @@ set(CMAKE_CXX_STANDARD 20)
 project(connector LANGUAGES CXX DESCRIPTION "SQream C++ connector" HOMEPAGE_URL https://github.com/SQream/cpp-connector)
 
 set(CMAKE_CXX_COMPILER "clang++")
+include_directories (.)
 
-# #[[
+##[[
 if (MSVC)
-    # warning level 4 and all warnings as errors
-    add_compile_options(/W4 /WX)
+    add_compile_options(/W4)                                              # warning level 4. /WX- all warnings as errors
 else()
-    # lots of warnings 
-    add_compile_options(-Wall -Wextra -pedantic)  # -Werror - all warnings as errors
+    add_compile_options(-Wall -Wextra -pedantic)                          # lots of warnings  -Werror - all warnings as errors
 endif()
 #]]
 
-# set(CMAKE_POSITION_INDEPENDENT_CODE ON)   # Set -fPIC on all targets
 
-include_directories (.)
-
+## ----- linking requirements  ------
 find_package(OpenSSL REQUIRED)
+link_libraries(OpenSSL::SSL OpenSSL::Crypto)                               # Link all targets with openssl / crypto
 
-add_library(connector ./connector.cpp)
-set_property(TARGET connector PROPERTY POSITION_INDEPENDENT_CODE ON)       # -fPIC 
+## ---- .so / .dll build ------
+add_library(connector SHARED ./connector.cpp)                              # Sets POSITION_INDEPENDENT_CODE as well
 set_property(TARGET connector PROPERTY INTERPROCEDURAL_OPTIMIZATION TRUE)  # -flto 
 
+#! set_property(TARGET connector PROPERTY POSITION_INDEPENDENT_CODE ON)    # done automatically when setting library to SHARED
+#! set(CMAKE_POSITION_INDEPENDENT_CODE ON)   # Set -fPIC on all targets
+
+## ----- sample.exe build -----
+add_executable(sample ./sample.cpp ./connector.cpp)
+
+## ----- tests.exe build -----
+add_executable(tests ./tests/tests.cpp ./connector.cpp)
 
 
-target_link_libraries(connector PRIVATE OpenSSL::SSL OpenSSL::Crypto)
+#! Alternative for linking per target - we link ssl/crypto for all targets
+#! target_link_libraries(connector PRIVATE OpenSSL::SSL OpenSSL::Crypto)
+#! target_link_libraries(sample    PRIVATE OpenSSL::SSL OpenSSL::Crypto)
