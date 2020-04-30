@@ -96,7 +96,6 @@ json.hpp
 ```
 
 ## Next
-- Mod CMake on Linux / Windows
-- Convert tests to Catch2
+- Add pthread to cmake
 - Merge to hpp
 - Clean up socket file
