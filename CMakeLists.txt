@@ -16,8 +16,16 @@ endif()
 
 
 ## ----- linking requirements  ------
+
+# OpenSSL
 find_package(OpenSSL REQUIRED)
-link_libraries(OpenSSL::SSL OpenSSL::Crypto)                               # Link all targets with openssl / crypto
+link_libraries(OpenSSL::SSL OpenSSL::Crypto)  # Link all targets with openssl / crypto                             
+
+# pthreads
+# set(CMAKE_THREAD_PREFER_PTHREAD ON)
+# set(THREADS_PREFER_PTHREAD_FLAG ON)
+find_package(Threads REQUIRED)
+link_libraries(Threads::Threads) # Link all targets with thread
 
 ## ---- .so / .dll build ------
 add_library(connector SHARED ./connector.cpp)                              # Sets POSITION_INDEPENDENT_CODE as well
@@ -30,7 +38,7 @@ set_property(TARGET connector PROPERTY INTERPROCEDURAL_OPTIMIZATION TRUE)  # -fl
 add_executable(sample ./sample.cpp ./connector.cpp)
 
 ## ----- tests.exe build -----
-add_executable(tests ./tests/tests.cpp ./connector.cpp)
+add_executable(sq_tests ./tests/tests.cpp ./connector.cpp)
 
 
 #! Alternative for linking per target - we link ssl/crypto for all targets

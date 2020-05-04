@@ -67,7 +67,7 @@ typedef size_t sock_buf_size;
 struct ssl_st;
 typedef struct ssl_st SSL;
 
-class TSocketClient
+struct TSocketClient
 {
 
 public:

@@ -345,7 +345,7 @@ sqream::CONSTS::statement_type sqream::connector::metadata_query(std::vector<col
             retval=CONSTS::statement_type::insert;
             columns_metadata_in.resize(queryTypeIn_reply_json["queryType"].size());
             const json &in_array = queryTypeIn_reply_json["queryType"];
-            for(auto i=0; i<in_array.size(); i++)
+            for(size_t i=0; i<in_array.size(); i++)
             {
                 uint8_t checksum=0;
                 if(in_array[i].contains("isTrueVarChar")) columns_metadata_in[i].is_true_varchar = in_array[i]["isTrueVarChar"], checksum|=1;
