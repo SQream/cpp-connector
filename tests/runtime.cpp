@@ -1,9 +1,3 @@
-// #define CATCH_CONFIG_MAIN  // This tells Catch to provide a main() - only do this in one cpp file
-// # include "catch.hpp"
-#define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
-#define DOCTEST_CONFIG_COLORS_NONE
-#include "doctest.h"
-
 #include <limits>
 #include <cmath>
 #include <iostream>
@@ -15,6 +9,7 @@
 #include <climits>      /* INT_MAX, LONG_MAX, ... */
 #include <limits>
 #include <array>
+#include <cassert>   // assert()
 
 #include "../connector.h"  // Reflecting the code structure, possibly becomes ../src/connector.h in the future
 
@@ -241,35 +236,41 @@ struct init_network_insert_high_level_fixture {
 // Tests Start
 // -----------
 
+bool test_pass = false, tests_pass = false;
+
 bool setup_tests (string ip = "127.0.0.1", int port = 5001, bool ssl = true){
 
     auto argc = 5;
     unsigned int seed = time(nullptr);
     printf("seed is %ud\n", seed);
     srand(seed);
-    
+    printf ("fekbet\n");
+
     sqc.connect(ip, port, ssl, "sqream", "sqream", "master");
+    printf ("fekbet2\n");
+
     try {
+            printf ("fekbet3\n");
+
         run_direct_query(&sqc, str("drop database ", db_name));
+    printf ("fekbet4\n");
+
         sqc.finish_query();
     }
     catch (...) {}
-    
     run_direct_query(&sqc, str("create database ", db_name));
     sqc.connect(ip, port, ssl, "sqream", "sqream", db_name);
 
-    return true;
+    return test_pass;
 }
 
 // BOOST_FIXTURE_TEST_SUITE(runtime_test, init_network_insert_high_level_fixture)
 
-TEST_CASE ("Runtime test suite") {
+string current_test = "Runtime test suite";
 
-//  --- Setup for all tests
-setup_tests();
 
 /*
-SUBCASE("explicit_connection_disconnection") {
+bool "explicit_connection_disconnection") {
     std::unique_ptr<sqream::driver> temp(new sqream::driver());
     temp->connect(sqc.sqc_->ipv4_,sqc.sqc_->port_, sqc.sqc_->ssl_, sqc.sqc_->username_, sqc.sqc_->password_, sqc.sqc_->database_, sqc.sqc_->service_);
 
@@ -277,18 +278,20 @@ SUBCASE("explicit_connection_disconnection") {
     int row_count = 0;
     bool p;
     while ((p=temp->next_query_row())) {
-        CHECK(temp->get_int(0));
+        assert(temp->get_int(0));
         ++row_count;
     }
-    CHECK(row_count == 1);
+    assert(row_count == 1);
     temp->finish_query();
     temp.reset(nullptr);
 }
 //*/
 
+bool simple() {
 
-SUBCASE ("simple") {
+    printf("fud");
     run_direct_query(&sqc, "create or replace table t(x int not null)");
+    printf("fud2");
     new_query_execute(&sqc, "insert into t values(?)");
     int val = rand();
     sqc.set_int(0, val);
@@ -299,14 +302,18 @@ SUBCASE ("simple") {
     int row_count = 0;
     bool p;
     while ((p=sqc.next_query_row())) {
-        CHECK(sqc.get_int(0) == val);
+        assert(sqc.get_int(0) == val);
         ++row_count;
     }
-    CHECK(row_count == 1);
+    assert(row_count == 1);
     sqc.finish_query();
+
+    return test_pass;
 }
 
-SUBCASE("simple_tiny_chunk") { connect();
+
+bool simple_tiny_chunk() {
+
     run_direct_query(&sqc, "create or replace table t (x int not null)");
     new_query_execute(&sqc, "insert into t values (?)");
     int nrows = 1;
@@ -323,14 +330,18 @@ SUBCASE("simple_tiny_chunk") { connect();
     int row_count = 0;
     srand(seed);
     while (sqc.next_query_row()) {
-        CHECK(sqc.get_int(0) == rand());
+        assert(sqc.get_int(0) == rand());
         ++row_count;
     }
-    CHECK(row_count == nrows);
+    assert(row_count == nrows);
     sqc.finish_query();
+
+    return test_pass;
 }
 
-SUBCASE("mix_nvarchar_null") {
+
+bool mix_nvarchar_null() {
+
     run_direct_query(&sqc, "create or replace table t (x nvarchar(40))");
     new_query_execute(&sqc, "insert into t values (?)");
 
@@ -348,22 +359,26 @@ SUBCASE("mix_nvarchar_null") {
 
     new_query_execute(&sqc, "select * from t");
     sqc.next_query_row();
-    CHECK(sqc.get_nvarchar(0) == "this is a dot.");
+    assert(sqc.get_nvarchar(0) == "this is a dot.");
     sqc.next_query_row();
-    CHECK(sqc.get_nvarchar(0) == "this might be a plus+");
+    assert(sqc.get_nvarchar(0) == "this might be a plus+");
     sqc.next_query_row();
-    CHECK(sqc.is_null(0) == true);
+    assert(sqc.is_null(0) == true);
     sqc.next_query_row();
-    CHECK(sqc.get_nvarchar(0) == "this definitely is a minus-");
+    assert(sqc.get_nvarchar(0) == "this definitely is a minus-");
     sqc.next_query_row();
-    CHECK(sqc.get_nvarchar(0) == "this looks like a zero0");
+    assert(sqc.get_nvarchar(0) == "this looks like a zero0");
     sqc.next_query_row();
     sqc.finish_query();
+
+    return test_pass;
 }
 
-SUBCASE("multiple_nvarchar_column") {
-    run_direct_query(&sqc, "create or replace table \"public\".\"customers\" (\"a\" bigint null identity(1,1) check ('CS \"default\"'),\"id\" int not null check ('CS \"default\"'),\"fname\" varchar(20) not null check ('CS \"default\"'),\"lname\" nvarchar(20) null check ('CS \"default\"'))");
-    run_direct_query(&sqc, "create or replace table \"public\".\"ncustomers_sales\" (\"id\" int not null check ('CS \"default\"'),\"name_var\" varchar(20) not null check ('CS \"default\"'),\"name_nvar\" nvarchar(20) not null check ('CS \"default\"'),\"sales\" double not null check ('CS \"default\"'))");
+
+bool multiple_nvarchar_column() {
+
+    run_direct_query(&sqc, "create or replace table \"public\".\"customers\" (\"a\" bigint null identity(1,1) assert ('CS \"default\"'),\"id\" int not null assert ('CS \"default\"'),\"fname\" varchar(20) not null assert ('CS \"default\"'),\"lname\" nvarchar(20) null assert ('CS \"default\"'))");
+    run_direct_query(&sqc, "create or replace table \"public\".\"ncustomers_sales\" (\"id\" int not null assert ('CS \"default\"'),\"name_var\" varchar(20) not null assert ('CS \"default\"'),\"name_nvar\" nvarchar(20) not null assert ('CS \"default\"'),\"sales\" double not null assert ('CS \"default\"'))");
     new_query_execute(&sqc, "insert into customers values (?,?,?,?)");
     sqc.set_long(0, 6);
     sqc.set_int(1, 1);
@@ -419,54 +434,57 @@ SUBCASE("multiple_nvarchar_column") {
     new_query_execute(&sqc, "select top 1000 1 as \"number_of_records\",   \"customers\".\"a\" as \"a\",   \"customers\".\"fname\" as \"fname\",   \"customers\".\"id\" as \"id\",   \"ncustomers_sales\".\"id\" as \"id__ncustomers_sales_\",   \"customers\".\"lname\" as \"lname\",   \"ncustomers_sales\".\"name_nvar\" as \"name_nvar\",   \"ncustomers_sales\".\"name_var\" as \"name_var\",   \"ncustomers_sales\".\"sales\" as \"sales\" from \"public\".\"customers\" \"customers\"   inner join \"public\".\"ncustomers_sales\" \"ncustomers_sales\" on (\"customers\".\"id\" = \"ncustomers_sales\".\"id\")");
     sqc.next_query_row();
         
-    CHECK(sqc.get_int(0) == 1);
-    CHECK(sqc.get_long(1) == 6L);
-    CHECK(sqc.get_varchar(2) == "Lea                 ");
-    CHECK(sqc.get_int(3) == 1);
-    CHECK(sqc.get_int(4) == 1);
-    CHECK(sqc.get_nvarchar(5) == "Huntington");
-    CHECK(sqc.get_nvarchar(6) == "AAA");
-    CHECK(sqc.get_varchar(7) == "AAA                 ");
-    CHECK(sqc.get_double(8) == 100.0);
+    assert(sqc.get_int(0) == 1);
+    assert(sqc.get_long(1) == 6L);
+    assert(sqc.get_varchar(2) == "Lea                 ");
+    assert(sqc.get_int(3) == 1);
+    assert(sqc.get_int(4) == 1);
+    assert(sqc.get_nvarchar(5) == "Huntington");
+    assert(sqc.get_nvarchar(6) == "AAA");
+    assert(sqc.get_varchar(7) == "AAA                 ");
+    assert(sqc.get_double(8) == 100.0);
     sqc.next_query_row();
     
-    CHECK(sqc.get_int(0) == 1);
-    CHECK(sqc.get_long(1) == 7L);
-    CHECK(sqc.get_varchar(2) == "George              ");
-    CHECK(sqc.get_int(3) == 2);
-    CHECK(sqc.get_int(4) == 2);
-    CHECK(sqc.get_nvarchar(5) == "Li");
-    CHECK(sqc.get_nvarchar(6) == "AAA");
-    CHECK(sqc.get_varchar(7) == "AAA                 ");
-    CHECK(sqc.get_double(8) == 75.0);
+    assert(sqc.get_int(0) == 1);
+    assert(sqc.get_long(1) == 7L);
+    assert(sqc.get_varchar(2) == "George              ");
+    assert(sqc.get_int(3) == 2);
+    assert(sqc.get_int(4) == 2);
+    assert(sqc.get_nvarchar(5) == "Li");
+    assert(sqc.get_nvarchar(6) == "AAA");
+    assert(sqc.get_varchar(7) == "AAA                 ");
+    assert(sqc.get_double(8) == 75.0);
     sqc.next_query_row();
     
-    CHECK(sqc.get_int(0) == 1);
-    CHECK(sqc.get_long(1) == 8L);
-    CHECK(sqc.get_varchar(2) == "Leo                 ");
-    CHECK(sqc.get_int(3) == 3);
-    CHECK(sqc.get_int(4) == 3);
-    CHECK(sqc.get_nvarchar(5) == "Bridge");
-    CHECK(sqc.get_nvarchar(6) == "BBB");
-    CHECK(sqc.get_varchar(7) == "BBB                 ");
-    CHECK(sqc.get_double(8) == 25.0);
+    assert(sqc.get_int(0) == 1);
+    assert(sqc.get_long(1) == 8L);
+    assert(sqc.get_varchar(2) == "Leo                 ");
+    assert(sqc.get_int(3) == 3);
+    assert(sqc.get_int(4) == 3);
+    assert(sqc.get_nvarchar(5) == "Bridge");
+    assert(sqc.get_nvarchar(6) == "BBB");
+    assert(sqc.get_varchar(7) == "BBB                 ");
+    assert(sqc.get_double(8) == 25.0);
     sqc.next_query_row();
     
-    CHECK(sqc.get_int(0) == 1);
-    CHECK(sqc.get_long(1) == 9L);
-    CHECK(sqc.get_varchar(2) == "Tao                 ");
-    CHECK(sqc.get_int(3) == 4);
-    CHECK(sqc.get_int(4) == 4);
-    CHECK(sqc.get_nvarchar(5) == "Chung");
-    CHECK(sqc.get_nvarchar(6) == "BBB");
-    CHECK(sqc.get_varchar(7) == "BBB                 ");
-    CHECK(sqc.get_double(8) == 100.0);
+    assert(sqc.get_int(0) == 1);
+    assert(sqc.get_long(1) == 9L);
+    assert(sqc.get_varchar(2) == "Tao                 ");
+    assert(sqc.get_int(3) == 4);
+    assert(sqc.get_int(4) == 4);
+    assert(sqc.get_nvarchar(5) == "Chung");
+    assert(sqc.get_nvarchar(6) == "BBB");
+    assert(sqc.get_varchar(7) == "BBB                 ");
+    assert(sqc.get_double(8) == 100.0);
     sqc.next_query_row();
         
     sqc.finish_query();
+
+    return test_pass;
 }
 
-SUBCASE("simple_tiny_chunk2") {
+bool simple_tiny_chunk2() {
+
     run_direct_query(&sqc, "create or replace table t (x int not null)");
     new_query_execute(&sqc, "insert into t values (?)");
     int nrows = 2;
@@ -480,14 +498,17 @@ SUBCASE("simple_tiny_chunk2") {
     new_query_execute(&sqc, "select * from t");
     int row_count = 0;
     while (sqc.next_query_row()) {
-        CHECK(sqc.get_int(0) == 1234);
+        assert(sqc.get_int(0) == 1234);
         ++row_count;
     }
-    CHECK(row_count == nrows);
+    assert(row_count == nrows);
     sqc.finish_query();
+
+    return test_pass;
 }
 
-SUBCASE("empty_string_chunk") {
+
+bool empty_string_chunk() {
     run_direct_query(&sqc, "create or replace table t (x nvarchar(10) not null)");
     new_query_execute(&sqc, "insert into t values (?)");
 
@@ -498,13 +519,16 @@ SUBCASE("empty_string_chunk") {
 
     new_query_execute(&sqc, "select * from t");
     while (sqc.next_query_row()) {
-        CHECK(sqc.get_nvarchar(0).empty() == true);
+        assert(sqc.get_nvarchar(0).empty() == true);
     }
     sqc.finish_query();
+
+    return test_pass;
 }
 
+
 /*START POSITIVE TESTING*/
-SUBCASE("int_insert_positive_test") {
+bool int_insert_positive_test() {
     run_direct_query(&sqc, "create or replace table t (x int not null)");
     new_query_execute(&sqc, "insert into t values (?)");
     auto nrows = 3;
@@ -520,14 +544,17 @@ SUBCASE("int_insert_positive_test") {
     new_query_execute(&sqc, "select * from t");
     int row_count = 0;
     while (sqc.next_query_row()) {
-        CHECK(sqc.get_int(0) == vals[row_count]);
+        assert(sqc.get_int(0) == vals[row_count]);
         ++row_count;
     }
-    CHECK(row_count == nrows);
+    assert(row_count == nrows);
     sqc.finish_query();
+
+    return test_pass;
 }
 
-SUBCASE("float_insert_positive_test") {
+
+bool float_insert_positive_test() {
     run_direct_query(&sqc, "create or replace table t (x double not null)");
     new_query_execute(&sqc, "insert into t values (?)");
     auto nrows = 7;
@@ -560,23 +587,27 @@ SUBCASE("float_insert_positive_test") {
 
     new_query_execute(&sqc, "select * from t");
     sqc.next_query_row();
-    CHECK(sqc.get_double(0) == vals[0]);
+    assert(sqc.get_double(0) == vals[0]);
     sqc.next_query_row();
-    CHECK(sqc.get_double(0) == vals[1]);
+    assert(sqc.get_double(0) == vals[1]);
     sqc.next_query_row();
-    CHECK(sqc.get_double(0) == vals[2]);
+    assert(sqc.get_double(0) == vals[2]);
     sqc.next_query_row();
-    CHECK(sqc.get_double(0) == vals[3]);
+    assert(sqc.get_double(0) == vals[3]);
     sqc.next_query_row();
-    CHECK(std::isinf(sqc.get_double(0)) == true);
+    assert(std::isinf(sqc.get_double(0)) == true);
     sqc.next_query_row();
-    CHECK(std::isinf(sqc.get_double(0)) == true);
+    assert(std::isinf(sqc.get_double(0)) == true);
     sqc.next_query_row();
-    CHECK(std::isnan(sqc.get_double(0)) == true);
+    assert(std::isnan(sqc.get_double(0)) == true);
     sqc.finish_query();
+
+    return test_pass;
 }
 
-SUBCASE("bool_insert_positive_test") {
+
+bool bool_insert_positive_test() {
+
     run_direct_query(&sqc, "create or replace table t (x bool not null)");
     new_query_execute(&sqc, "insert into t values (?)");
     auto nrows = 2;
@@ -590,14 +621,18 @@ SUBCASE("bool_insert_positive_test") {
     new_query_execute(&sqc, "select * from t");
     int row_count = 0;
     while (sqc.next_query_row()) {
-        CHECK(sqc.get_bool(0) == vals[row_count]);
+        assert(sqc.get_bool(0) == vals[row_count]);
         ++row_count;
     }
-    CHECK(row_count == nrows);
+    assert(row_count == nrows);
     sqc.finish_query();
+
+    return test_pass;
 }
 
-SUBCASE("date_insert_positive_test") {
+
+bool date_insert_positive_test() {
+
     run_direct_query(&sqc, "create or replace table t (x date not null)");
     new_query_execute(&sqc, "insert into t values (?)");
     auto nrows = 27;
@@ -629,14 +664,18 @@ SUBCASE("date_insert_positive_test") {
     new_query_execute(&sqc, "select * from t");
     int row_count = 0;
     while (sqc.next_query_row()) {
-        CHECK(comp_date_t(sqream::make_date(sqc.get_date(0)), vals[row_count]) == true);
+        assert(comp_date_t(sqream::make_date(sqc.get_date(0)), vals[row_count]) == true);
         ++row_count;
     }
-    CHECK(row_count == nrows);
+    assert(row_count == nrows);
     sqc.finish_query();
+
+    return test_pass;
 }
 
-SUBCASE("datetime_insert_positive_test") {
+
+bool datetime_insert_positive_test() {
+
     run_direct_query(&sqc, "create or replace table t (x datetime not null)");
     new_query_execute(&sqc, "insert into t values (?)");
     auto nrows = 29;
@@ -669,14 +708,18 @@ SUBCASE("datetime_insert_positive_test") {
     new_query_execute(&sqc, "select * from t");
     int row_count = 0;
     while (sqc.next_query_row()) {
-        CHECK(comp_datetime_t(sqream::make_datetime(sqc.get_datetime(0)), vals[row_count]) == true);
+        assert(comp_datetime_t(sqream::make_datetime(sqc.get_datetime(0)), vals[row_count]) == true);
         ++row_count;
     }
-    CHECK(row_count == nrows);
+    assert(row_count == nrows);
     sqc.finish_query();
+
+    return test_pass;
 }
+
 /*
-SUBCASE("time_insert_positive_test) {
+bool time_insert_positive_test() {
+
     run_direct_query(&sqc, "create or replace table t (x datetime not null)");
     new_query_execute(&sqc, "insert into t values (?)");
     auto nrows = 2;
@@ -693,14 +736,17 @@ SUBCASE("time_insert_positive_test) {
     new_query_execute(&sqc, "select * from t");
     int row_count = 0;
     while (sqc.next_query_row()) {
-        CHECK(sqc.get_datetime(0) == vals[row_count]);
+        assert(sqc.get_datetime(0) == vals[row_count]);
         ++row_count;
     }
-    CHECK(row_count == nrows);
+    assert(row_count == nrows);
     sqc.finish_query();
-}*/
 
-SUBCASE("varchar_insert_positive_test") {
+}  //*/
+
+
+bool varchar_insert_positive_test() {
+
     run_direct_query(&sqc, "create or replace table t (x varchar(10) not null)");
     new_query_execute(&sqc, "insert into t values (?)");
     auto nrows = 1;
@@ -712,10 +758,10 @@ SUBCASE("varchar_insert_positive_test") {
     new_query_execute(&sqc, "select * from t");
     int row_count = 0;
     while (sqc.next_query_row()) {
-        CHECK(sqc.get_varchar(0) == val);
+        assert(sqc.get_varchar(0) == val);
         ++row_count;
     }
-    CHECK(row_count == nrows);
+    assert(row_count == nrows);
     sqc.finish_query();
 
     run_direct_query(&sqc, "truncate table t");
@@ -728,10 +774,10 @@ SUBCASE("varchar_insert_positive_test") {
     new_query_execute(&sqc, "select * from t");
     row_count = 0;
     while (sqc.next_query_row()) {
-        CHECK(sqc.get_varchar(0) == rpad(val, 10, ' '));
+        assert(sqc.get_varchar(0) == rpad(val, 10, ' '));
         ++row_count;
     }
-    CHECK(row_count == nrows);
+    assert(row_count == nrows);
     sqc.finish_query();
 
     run_direct_query(&sqc, "truncate table t");
@@ -744,10 +790,10 @@ SUBCASE("varchar_insert_positive_test") {
     new_query_execute(&sqc, "select * from t");
     row_count = 0;
     while (sqc.next_query_row()) {
-        CHECK(sqc.get_varchar(0) == rpad(val, 10, ' '));
+        assert(sqc.get_varchar(0) == rpad(val, 10, ' '));
         ++row_count;
     }
-    CHECK(row_count == nrows);
+    assert(row_count == nrows);
     sqc.finish_query();
 
     run_direct_query(&sqc, "truncate table t");
@@ -760,14 +806,17 @@ SUBCASE("varchar_insert_positive_test") {
     new_query_execute(&sqc, "select * from t");
     row_count = 0;
     while (sqc.next_query_row()) {
-        CHECK(sqc.get_varchar(0) == rpad(val, 10, ' '));
+        assert(sqc.get_varchar(0) == rpad(val, 10, ' '));
         ++row_count;
     }
-    CHECK(row_count == nrows);
+    assert(row_count == nrows);
     sqc.finish_query();
+
+    return true;
 }
 
-SUBCASE("nvarchar_insert_positive_test") {
+bool nvarchar_insert_positive_test() {
+
     run_direct_query(&sqc, "create or replace table t (x nvarchar(10) not null)");
     new_query_execute(&sqc, "insert into t values (?)");
     auto nrows = 3;
@@ -781,10 +830,10 @@ SUBCASE("nvarchar_insert_positive_test") {
     new_query_execute(&sqc, "select * from t");
     int row_count = 0;
     while (sqc.next_query_row()) {
-        CHECK(sqc.get_nvarchar(0) == vals[row_count]);
+        assert(sqc.get_nvarchar(0) == vals[row_count]);
         ++row_count;
     }
-    CHECK(row_count == nrows);
+    assert(row_count == nrows);
     sqc.finish_query();
 
     nrows = 1;
@@ -799,10 +848,10 @@ SUBCASE("nvarchar_insert_positive_test") {
     new_query_execute(&sqc, "select * from t");
     row_count = 0;
     while (sqc.next_query_row()) {
-        CHECK(sqc.get_nvarchar(0).empty() == true);
+        assert(sqc.get_nvarchar(0).empty() == true);
         ++row_count;
     }
-    CHECK(row_count == nrows);
+    assert(row_count == nrows);
     sqc.finish_query();
 
     run_direct_query(&sqc, "truncate table t");
@@ -815,14 +864,18 @@ SUBCASE("nvarchar_insert_positive_test") {
     new_query_execute(&sqc, "select * from t");
     row_count = 0;
     while (sqc.next_query_row()) {
-        CHECK(sqc.get_nvarchar(0) == normal_val);
+        assert(sqc.get_nvarchar(0) == normal_val);
         ++row_count;
     }
-    CHECK(row_count == nrows);
+    assert(row_count == nrows);
     sqc.finish_query();
+
+    return test_pass;
 }
 
-SUBCASE("nvarchar_insert_positive_test_big") {
+
+bool nvarchar_insert_positive_test_big() {
+
     run_direct_query(&sqc, "create or replace table t (x nvarchar(10) not null)");
     new_query_execute(&sqc, "insert into t values (?)");
     auto nrows = 2 * 1024 * 1024;
@@ -838,15 +891,18 @@ SUBCASE("nvarchar_insert_positive_test_big") {
     int row_count = 0;
     srand(seed);
     while (sqc.next_query_row()) {
-        CHECK(sqc.get_nvarchar(0) == rand_utf8_string(10));
+        assert(sqc.get_nvarchar(0) == rand_utf8_string(10));
         ++row_count;
     }
-    CHECK(row_count == nrows);
+    assert(row_count == nrows);
     sqc.finish_query();
+
+    return test_pass;
 }
 
+
 /*
-SUBCASE("get_chunk_size_positive_test) {
+bool "get_chunk_size_positive_test) {
     run_direct_query(&sqc, "create or replace table t (x int not null)");
     new_query_execute(&sqc, "insert into t values (?)");
     auto nrows = 5;
@@ -864,13 +920,14 @@ SUBCASE("get_chunk_size_positive_test) {
     while (sqc.next_query_row()) {
         ++row_count;
     }
-    CHECK(row_count == nrows);
-    CHECK(get_chunk_size(s.get()) == nrows);
+    assert(row_count == nrows);
+    assert(get_chunk_size(s.get()) == nrows);
     sqc.finish_query();
 }*/
 
 
-SUBCASE("get_columns_info_positive_test") {
+bool get_columns_info_positive_test() {
+
     run_direct_query(&sqc, "create or replace table t (x_v varchar(10) not null, x_i int not null, x_v_n varchar(10) null, x_i_n int null)");
 
     string s_val = "default";
@@ -889,30 +946,33 @@ SUBCASE("get_columns_info_positive_test") {
 
     //We retrieve the column infos (which are send to metadata)
     //And we control that every column has the right 4 informations (name, type, nul, tvc)
-    CHECK(columns[0].name == "x_v");
-    CHECK(columns[0].type == "ftVarchar");
-    CHECK(columns[0].nullable == false);
-    CHECK(columns[0].is_true_varchar == false);
+    assert(columns[0].name == "x_v");
+    assert(columns[0].type == "ftVarchar");
+    assert(columns[0].nullable == false);
+    assert(columns[0].is_true_varchar == false);
 
-    CHECK(columns[1].name == "x_i");
-    CHECK(columns[1].type == "ftInt");
-    CHECK(columns[1].nullable == false);
-    CHECK(columns[1].is_true_varchar == false);
+    assert(columns[1].name == "x_i");
+    assert(columns[1].type == "ftInt");
+    assert(columns[1].nullable == false);
+    assert(columns[1].is_true_varchar == false);
 
-    CHECK(columns[2].name == "x_v_n");
-    CHECK(columns[2].type == "ftVarchar");
-    CHECK(columns[2].nullable == true);
-    CHECK(columns[2].is_true_varchar == false);
+    assert(columns[2].name == "x_v_n");
+    assert(columns[2].type == "ftVarchar");
+    assert(columns[2].nullable == true);
+    assert(columns[2].is_true_varchar == false);
 
-    CHECK(columns[3].name == "x_i_n");
-    CHECK(columns[3].type == "ftInt");
-    CHECK(columns[3].nullable == true);
-    CHECK(columns[3].is_true_varchar == false);
+    assert(columns[3].name == "x_i_n");
+    assert(columns[3].type == "ftInt");
+    assert(columns[3].nullable == true);
+    assert(columns[3].is_true_varchar == false);
     sqc.finish_query();
+
+    return test_pass;
 }
 
 // TEST DEFAULT
-SUBCASE("int_insert_default_positive_test") {
+bool int_insert_default_positive_test() {
+
     auto nrows = 3;
     int vals[] {INT_MAX, INT_MIN, 0};
 
@@ -929,16 +989,19 @@ SUBCASE("int_insert_default_positive_test") {
     new_query_execute(&sqc, "select * from t");
     int row_count = 0;
     while (sqc.next_query_row()) {
-        CHECK(sqc.get_int(0) == vals[row_count]);
-        CHECK(sqc.get_int(1) == 7);
+        assert(sqc.get_int(0) == vals[row_count]);
+        assert(sqc.get_int(1) == 7);
         ++row_count;
     }
-    CHECK(row_count == nrows);
+    assert(row_count == nrows);
     sqc.finish_query();
+
+    return test_pass;
 }
 
 // TEST DEFAULT VARCHAR
-SUBCASE("varchar_insert_default_positive_test") {
+bool varchar_insert_default_positive_test() {
+
     int nrows = 3;
     int vals[] {INT_MAX, INT_MIN, 0};
     run_direct_query(&sqc, "create or replace table t (x int not null, y varchar(10) default 'hello')");
@@ -952,16 +1015,19 @@ SUBCASE("varchar_insert_default_positive_test") {
     new_query_execute(&sqc, "select * from t");
     int row_count = 0;
     while (sqc.next_query_row()) {
-        CHECK(sqc.get_int(0) == vals[row_count]);
-        CHECK(sqc.get_varchar(1) == "hello     ");
+        assert(sqc.get_int(0) == vals[row_count]);
+        assert(sqc.get_varchar(1) == "hello     ");
         ++row_count;
     }
-    CHECK(row_count == nrows);
+    assert(row_count == nrows);
     sqc.finish_query();
+
+    return test_pass;
 }
 
 // TEST IDENTITY
-SUBCASE("int_insert_identity_positive_test") {
+bool int_insert_identity_positive_test() {
+
     auto nrows = 3;
     int vals[] {INT_MAX, INT_MIN, 0};
     int identity = 17;
@@ -979,15 +1045,18 @@ SUBCASE("int_insert_identity_positive_test") {
     new_query_execute(&sqc, "select * from t");
     int row_count = 0;
     while (sqc.next_query_row()) {
-        CHECK(sqc.get_int(0) == vals[row_count]);
-        CHECK(sqc.get_int(1) == identity++);
+        assert(sqc.get_int(0) == vals[row_count]);
+        assert(sqc.get_int(1) == identity++);
         ++row_count;
     }
-    CHECK(row_count == nrows);
+    assert(row_count == nrows);
     sqc.finish_query();
+
+    return test_pass;
 }
 
-SUBCASE("driver_internal_struct_coverage") {
+
+bool driver_internal_struct_coverage() {
     //Filling Coverage missing function calls for simple structures
 
     //sqream::column
@@ -995,9 +1064,13 @@ SUBCASE("driver_internal_struct_coverage") {
     sqream::column copy = {"my_column2", false, false, "my_type2", 4, 0};
     copy = temp;
     auto moved = std::move(copy);
+
+    return test_pass;
 }
 
-SUBCASE("retrieve_stmt_id") {
+/*
+bool retrieve_stmt_id() {
+
     std::unique_ptr<sqream::driver> temp(new sqream::driver());
     REQUIRE_THROWS_AS(retrieve_statement_id(temp.get()), std::string);
     temp->connect(sqc.sqc_->ipv4_,sqc.sqc_->port_, sqc.sqc_->ssl_, sqc.sqc_->username_, sqc.sqc_->password_, sqc.sqc_->database_, sqc.sqc_->service_);
@@ -1005,41 +1078,50 @@ SUBCASE("retrieve_stmt_id") {
     new_query_execute(temp.get(), "select 1");
     int row_count = 0;
     while (temp->next_query_row()) {
-        CHECK(temp->get_int(0));
+        assert(temp->get_int(0));
         ++row_count;
     }
     retrieve_statement_id(temp.get());
-    CHECK(row_count == 1);
+    assert(row_count == 1);
     temp->finish_query();
+
+    return test_pass;
 }
 
-SUBCASE("retrieve_stmt_type") {
+
+bool retrieve_stmt_type() {
+
     std::unique_ptr<sqream::driver> temp(new sqream::driver());
     REQUIRE_THROWS_AS(retrieve_statement_type(temp.get()), std::string);
     temp->connect(sqc.sqc_->ipv4_,sqc.sqc_->port_, sqc.sqc_->ssl_, sqc.sqc_->username_, sqc.sqc_->password_, sqc.sqc_->database_, sqc.sqc_->service_);
-    CHECK(retrieve_statement_type(temp.get()) == con::CONSTS::unset);
+    assert(retrieve_statement_type(temp.get()) == con::CONSTS::unset);
 
     run_direct_query(temp.get(), "create or replace table retrieve_types(x int not null)");
-    CHECK(retrieve_statement_type(temp.get()) == con::CONSTS::direct);
+    assert(retrieve_statement_type(temp.get()) == con::CONSTS::direct);
 
     new_query_execute(temp.get(), "insert into retrieve_types values(?)");
-    CHECK(retrieve_statement_type(temp.get()) == con::CONSTS::insert);
+    assert(retrieve_statement_type(temp.get()) == con::CONSTS::insert);
     temp->set_int(0, 666);
     temp->next_query_row();
     temp->finish_query();
 
     new_query_execute(temp.get(), "select * from retrieve_types");
-    CHECK(retrieve_statement_type(temp.get()) == con::CONSTS::select);
+    assert(retrieve_statement_type(temp.get()) == con::CONSTS::select);
     while (temp->next_query_row()) {}
     temp->finish_query();
+
+    return test_pass;
 }
+//*/
 
 /*END OF POSITIVE TESTING*/
 
 // NEGATIVE TESTING FOR SETTERS
 
+/*
 //Here we need to figure out the way of doing eli's create or replace table function
-SUBCASE("negative_testing_types_not_null") {
+bool negative_testing_types_not_null() {
+
     run_direct_query(&sqc,"create or replace table t (bool0 bool not null,bit1 bit not null,tinyint2 tinyint not null,smallint3 smallint not null,int4 int not null,bigint5 bigint not null,real6 real not null,float7 float not null,date8 date not null,datetime9 datetime not null,varchar_10_10 varchar(10) not null,varchar_100_11 varchar(100) not null)");
     new_query_execute(&sqc, str("insert into t values (?,?,?,?,?,?,?,?,?,?,?,?)"));
     int i = 0;
@@ -1054,10 +1136,13 @@ SUBCASE("negative_testing_types_not_null") {
     REQUIRE_THROWS_AS(sqc.set_null(i++), std::string);
     REQUIRE_THROWS_AS(sqc.set_null(i++), std::string);
     REQUIRE_THROWS_AS(sqc.set_null(i++), std::string);
+
+    return test_pass;
 }
+//*/
 
 /*
-SUBCASE("negative_testing_type_date_not_null) {
+bool "negative_testing_type_date_not_null) {
     run_direct_query(&sqc, "create or replace table t (x date not null)");
     new_query_execute(&sqc, "insert into t values (?)");
 
@@ -1077,7 +1162,7 @@ SUBCASE("negative_testing_type_date_not_null) {
     REQUIRE_THROWS_AS(sqc.set_date(0, date_vals(1,1,33)), std::string);
 }
 
-SUBCASE("negative_testing_type_datetime_not_null) {
+bool "negative_testing_type_datetime_not_null) {
     run_direct_query(&sqc, "create or replace table t (x datetime not null)");
     new_query_execute(&sqc, "insert into t values (?)");
 
@@ -1114,16 +1199,22 @@ SUBCASE("negative_testing_type_datetime_not_null) {
         sqream_exception); // illegal msecs
 }*/
 
-SUBCASE("negative_testing_type_varchar_not_null") {
+
+/*
+bool negative_testing_type_varchar_not_null() {
+
     run_direct_query(&sqc, "create or replace table t (x varchar(10) not null)");
 
     new_query_execute(&sqc, "insert into t values (?)");
     string val = "12345678901"; // overflow - 11 chars
     REQUIRE_THROWS_AS(sqc.set_varchar(0, val), std::string);
     REQUIRE_THROWS_AS(sqc.set_null(0), std::string);
+
+    return test_pass;
 }
 
-SUBCASE("negative_testing_type_nvarchar_not_null") {
+bool negative_testing_type_nvarchar_not_null() {
+
     run_direct_query(&sqc, "create or replace table t (x nvarchar(10) not null)");
 
     new_query_execute(&sqc, "insert into t values (?)");
@@ -1140,11 +1231,15 @@ SUBCASE("negative_testing_type_nvarchar_not_null") {
 
     new_query_execute(&sqc, "insert into t values (?)");
     REQUIRE_THROWS_AS(sqc.set_null(0), std::string);
+
+    return test_pass;
 }
+//*/
 
 /* END OF NEGATIVE TESTING FOR SETTERS*/
 
-SUBCASE("simple_bulk") {
+bool simple_bulk() {
+
     run_direct_query(&sqc, "create or replace table t (x int not null)");
     new_query_execute(&sqc, "insert into t values (?)");
     int nrows = 1024 * 1024;
@@ -1161,15 +1256,18 @@ SUBCASE("simple_bulk") {
     int row_count = 0;
     srand(seed);
     while (sqc.next_query_row(1<<26)) {
-        CHECK(sqc.get_int(0) == rand());
+        assert(sqc.get_int(0) == rand());
         ++row_count;
     }
-    CHECK(row_count == nrows);
+    assert(row_count == nrows);
     sqc.finish_query();
+
+    return test_pass;
 }
 
 
-SUBCASE("all_types") {
+bool all_types() {
+
     run_direct_query(&sqc,"create or replace table t (bool0 bool not null,bit1 bit not null,tinyint2 tinyint not null,smallint3 smallint not null,int4 int not null,bigint5 bigint not null,real6 real not null,float7 float not null,date8 date not null,datetime9 datetime not null,varchar_10_10 varchar(10) not null,varchar_100_11 varchar(100) not null, nvarchar_20_12 nvarchar(20) not null)");
     new_query_execute(&sqc, "insert into t values (?,?,?,?,?,?,?,?,?,?,?,?,?)");
     int nrows = 1000;
@@ -1200,26 +1298,30 @@ SUBCASE("all_types") {
     srand(seed);
     while (sqc.next_query_row()) {
         int i = 0;
-        CHECK(sqc.get_bool(i++) == rand_bool());
-        CHECK(sqc.get_bool(i++) == rand_bool());
-        CHECK(sqc.get_ubyte(i++) == rand_ubyte());
-        CHECK(sqc.get_short(i++) == rand_short());
-        CHECK(sqc.get_int(i++) == rand());
-        CHECK(sqc.get_long(i++) == rand_long());
-        CHECK(sqc.get_float(i++) == rand_float());
-        CHECK(sqc.get_double(i++) == rand_double());
-        CHECK(sqc.get_date(i++) == sqream::date(1991,2,21));
-        CHECK(sqc.get_datetime(i++) == sqream::datetime(1991,2,21,10,11,12,666));
-        CHECK(sqc.get_varchar(i++) == rand_string(10));
-        CHECK(sqc.get_varchar(i++) == rand_string(100));
-        CHECK(sqc.get_nvarchar(i++) == rand_string(20));
+        assert(sqc.get_bool(i++) == rand_bool());
+        assert(sqc.get_bool(i++) == rand_bool());
+        assert(sqc.get_ubyte(i++) == rand_ubyte());
+        assert(sqc.get_short(i++) == rand_short());
+        assert(sqc.get_int(i++) == rand());
+        assert(sqc.get_long(i++) == rand_long());
+        assert(sqc.get_float(i++) == rand_float());
+        assert(sqc.get_double(i++) == rand_double());
+        assert(sqc.get_date(i++) == sqream::date(1991,2,21));
+        assert(sqc.get_datetime(i++) == sqream::datetime(1991,2,21,10,11,12,666));
+        assert(sqc.get_varchar(i++) == rand_string(10));
+        assert(sqc.get_varchar(i++) == rand_string(100));
+        assert(sqc.get_nvarchar(i++) == rand_string(20));
         ++row_count;
     }
-    CHECK(row_count == nrows);
+    assert(row_count == nrows);
     sqc.finish_query();
+
+    return test_pass;
 }
 
-SUBCASE("all_types_with_nulls") {
+
+bool all_types_with_nulls() {
+
     run_direct_query(&sqc,"create or replace table t (bool0 bool null,bit1 bit null,tinyint2 tinyint null,smallint3 smallint null,int4 int null,bigint5 bigint null,real6 real null,float7 float null,date8 date null,datetime9 datetime null,varchar_10_10 varchar(10) null,varchar_100_11 varchar(100) null, nvarchar_20_12 nvarchar(20) null)");
     new_query_execute(&sqc, "insert into t values (?,?,?,?,?,?,?,?,?,?,?,?,?)");
     int nrows = 500;
@@ -1266,46 +1368,49 @@ SUBCASE("all_types_with_nulls") {
     srand(seed);
     while (sqc.next_query_row()) {
         int i = 0;
-        CHECK(sqc.get_bool(i++) == rand_bool());
-        CHECK(sqc.get_bool(i++) == rand_bool());
-        CHECK(sqc.get_ubyte(i++) == rand_ubyte());
-        CHECK(sqc.get_short(i++) == rand_short());
-        CHECK(sqc.get_int(i++) == rand());
-        CHECK(sqc.get_long(i++) == rand_long());
-        CHECK(sqc.get_float(i++) == rand_float());
-        CHECK(sqc.get_double(i++) == rand_double());
-        CHECK(sqc.get_date(i++) == sqream::date(1991,2,21));
-        CHECK(sqc.get_datetime(i++) == sqream::datetime(1991,2,21,10,11,12,666));
-        CHECK(sqc.get_varchar(i++) == rand_string(10));
-        CHECK(sqc.get_varchar(i++) == rand_string(100));
-        CHECK(sqc.get_nvarchar(i++) == rand_string(20));
+        assert(sqc.get_bool(i++) == rand_bool());
+        assert(sqc.get_bool(i++) == rand_bool());
+        assert(sqc.get_ubyte(i++) == rand_ubyte());
+        assert(sqc.get_short(i++) == rand_short());
+        assert(sqc.get_int(i++) == rand());
+        assert(sqc.get_long(i++) == rand_long());
+        assert(sqc.get_float(i++) == rand_float());
+        assert(sqc.get_double(i++) == rand_double());
+        assert(sqc.get_date(i++) == sqream::date(1991,2,21));
+        assert(sqc.get_datetime(i++) == sqream::datetime(1991,2,21,10,11,12,666));
+        assert(sqc.get_varchar(i++) == rand_string(10));
+        assert(sqc.get_varchar(i++) == rand_string(100));
+        assert(sqc.get_nvarchar(i++) == rand_string(20));
         ++row_count;
         if(sqc.next_query_row())
         {
             i=0;
-            CHECK(sqc.is_null(i++) == true);
-            CHECK(sqc.is_null(i++) == true);
-            CHECK(sqc.is_null(i++) == true);
-            CHECK(sqc.is_null(i++) == true);
-            CHECK(sqc.is_null(i++) == true);
-            CHECK(sqc.is_null(i++) == true);
-            CHECK(sqc.is_null(i++) == true);
-            CHECK(sqc.is_null(i++) == true);
-            CHECK(sqc.is_null(i++) == true);
-            CHECK(sqc.is_null(i++) == true);
-            CHECK(sqc.is_null(i++) == true);
-            CHECK(sqc.is_null(i++) == true);
-            CHECK(sqc.is_null(i++) == true);
+            assert(sqc.is_null(i++) == true);
+            assert(sqc.is_null(i++) == true);
+            assert(sqc.is_null(i++) == true);
+            assert(sqc.is_null(i++) == true);
+            assert(sqc.is_null(i++) == true);
+            assert(sqc.is_null(i++) == true);
+            assert(sqc.is_null(i++) == true);
+            assert(sqc.is_null(i++) == true);
+            assert(sqc.is_null(i++) == true);
+            assert(sqc.is_null(i++) == true);
+            assert(sqc.is_null(i++) == true);
+            assert(sqc.is_null(i++) == true);
+            assert(sqc.is_null(i++) == true);
             ++row_count;
         }
         else
             break;
     }
-    CHECK(row_count == 2*nrows);
+    assert(row_count == 2*nrows);
     sqc.finish_query();
+
+    return test_pass;
 }
 
-SUBCASE("all_types_with_nulls_named_col") {
+/*
+bool all_types_with_nulls_named_col() {
 
     run_direct_query(&sqc,"create or replace table t (bool0 bool null,bit1 bit null,tinyint2 tinyint null,smallint3 smallint null,int4 int null,bigint5 bigint null,real6 real null,float7 float null,date8 date null,datetime9 datetime null,varchar_10_10 varchar(10) null,varchar_100_11 varchar(100) null, nvarchar_20_12 nvarchar(20) null)");
     new_query_execute(&sqc, "insert into t values (?,?,?,?,?,?,?,?,?,?,?,?,?)");
@@ -1366,60 +1471,63 @@ SUBCASE("all_types_with_nulls_named_col") {
 
     new_query_execute(&sqc, "select * from t");
 
-    CHECK(sqc.is_nullable("bool0") == true);
-    CHECK(sqc.is_nullable("bit1") == true);
-    CHECK(sqc.is_nullable("tinyint2") == true);
-    CHECK(sqc.is_nullable("smallint3") == true);
-    CHECK(sqc.is_nullable("int4") == true);
-    CHECK(sqc.is_nullable("bigint5") == true);
-    CHECK(sqc.is_nullable("real6") == true);
-    CHECK(sqc.is_nullable("float7") == true);
-    CHECK(sqc.is_nullable("date8") == true);
-    CHECK(sqc.is_nullable("datetime9") == true);
-    CHECK(sqc.is_nullable("varchar_10_10") == true);
-    CHECK(sqc.is_nullable("varchar_100_11") == true);
-    CHECK(sqc.is_nullable("nvarchar_20_12") == true);
+    assert(sqc.is_nullable("bool0") == true);
+    assert(sqc.is_nullable("bit1") == true);
+    assert(sqc.is_nullable("tinyint2") == true);
+    assert(sqc.is_nullable("smallint3") == true);
+    assert(sqc.is_nullable("int4") == true);
+    assert(sqc.is_nullable("bigint5") == true);
+    assert(sqc.is_nullable("real6") == true);
+    assert(sqc.is_nullable("float7") == true);
+    assert(sqc.is_nullable("date8") == true);
+    assert(sqc.is_nullable("datetime9") == true);
+    assert(sqc.is_nullable("varchar_10_10") == true);
+    assert(sqc.is_nullable("varchar_100_11") == true);
+    assert(sqc.is_nullable("nvarchar_20_12") == true);
 
     int row_count = 0;
     srand(seed);
     while (sqc.next_query_row()) {
-        CHECK(sqc.get_bool("bool0") == rand_bool());
-        CHECK(sqc.get_bool("bit1") == rand_bool());
-        CHECK(sqc.get_ubyte("tinyint2") == rand_ubyte());
-        CHECK(sqc.get_short("smallint3") == rand_short());
-        CHECK(sqc.get_int("int4") == rand());
-        CHECK(sqc.get_long("bigint5") == rand_long());
-        CHECK(sqc.get_float("real6") == rand_float());
-        CHECK(sqc.get_double("float7") == rand_double());
-        CHECK(sqc.get_date("date8") == sqream::date(1991,2,21));
-        CHECK(sqc.get_datetime("datetime9") == sqream::datetime(1991,2,21,10,11,12,666));
-        CHECK(sqc.get_varchar("varchar_10_10") == rand_string(10));
-        CHECK(sqc.get_varchar("varchar_100_11") == rand_string(100));
-        CHECK(sqc.get_nvarchar("nvarchar_20_12") == rand_string(20));
+        assert(sqc.get_bool("bool0") == rand_bool());
+        assert(sqc.get_bool("bit1") == rand_bool());
+        assert(sqc.get_ubyte("tinyint2") == rand_ubyte());
+        assert(sqc.get_short("smallint3") == rand_short());
+        assert(sqc.get_int("int4") == rand());
+        assert(sqc.get_long("bigint5") == rand_long());
+        assert(sqc.get_float("real6") == rand_float());
+        assert(sqc.get_double("float7") == rand_double());
+        assert(sqc.get_date("date8") == sqream::date(1991,2,21));
+        assert(sqc.get_datetime("datetime9") == sqream::datetime(1991,2,21,10,11,12,666));
+        assert(sqc.get_varchar("varchar_10_10") == rand_string(10));
+        assert(sqc.get_varchar("varchar_100_11") == rand_string(100));
+        assert(sqc.get_nvarchar("nvarchar_20_12") == rand_string(20));
         ++row_count;
         if(sqc.next_query_row())
         {
-            CHECK(sqc.is_null("bool0") == true);
-            CHECK(sqc.is_null("bit1") == true);
-            CHECK(sqc.is_null("tinyint2") == true);
-            CHECK(sqc.is_null("smallint3") == true);
-            CHECK(sqc.is_null("int4") == true);
-            CHECK(sqc.is_null("bigint5") == true);
-            CHECK(sqc.is_null("real6") == true);
-            CHECK(sqc.is_null("float7") == true);
-            CHECK(sqc.is_null("date8") == true);
-            CHECK(sqc.is_null("datetime9") == true);
-            CHECK(sqc.is_null("varchar_10_10") == true);
-            CHECK(sqc.is_null("varchar_100_11") == true);
-            CHECK(sqc.is_null("nvarchar_20_12") == true);
+            assert(sqc.is_null("bool0") == true);
+            assert(sqc.is_null("bit1") == true);
+            assert(sqc.is_null("tinyint2") == true);
+            assert(sqc.is_null("smallint3") == true);
+            assert(sqc.is_null("int4") == true);
+            assert(sqc.is_null("bigint5") == true);
+            assert(sqc.is_null("real6") == true);
+            assert(sqc.is_null("float7") == true);
+            assert(sqc.is_null("date8") == true);
+            assert(sqc.is_null("datetime9") == true);
+            assert(sqc.is_null("varchar_10_10") == true);
+            assert(sqc.is_null("varchar_100_11") == true);
+            assert(sqc.is_null("nvarchar_20_12") == true);
             ++row_count;
         }
         else
             break;
     }
-    CHECK(row_count == 2*nrows);
+    assert(row_count == 2*nrows);
     sqc.finish_query();
+
+    return test_pass;
 }
+//*/
 
 //////// test the insert sequence operation
 /*
@@ -1439,57 +1547,64 @@ SUBCASE("all_types_with_nulls_named_col") {
 
 // next_row:in the case of running next row with partial sets on the columns an error should be thrown
 // set does not match column count before next row
-SUBCASE("negative_testing_next_row_column_count")
-{
+bool negative_testing_next_row_column_count() {
+
     run_direct_query(&sqc, "create or replace table t (x int not null, y int not null)");
     new_query_execute(&sqc, "insert into t values (?,?)");
     sqc.set_int(0, 5);
     try
     {
         sqc.next_query_row();
-        CHECK(false);
+        assert(false);
     }
     catch(std::string &se)
     {
-        CHECK(se.find(ERR_SQMC) != string::npos);
+        assert(se.find(ERR_SQMC) != string::npos);
     }
+
+    return test_pass;
 }
 
+
 //new_query_execute not matching table, table t (x int not null), "insert into t values (?,?)");
-SUBCASE("negative_testing_prepare_column_count")
-{
+bool negative_testing_prepare_column_count(){
+
     run_direct_query(&sqc, "create or replace table t (x int not null, y int not null)");
     try
     {
         new_query_execute(&sqc, "insert into t values (?)");
-        CHECK(false);
+        assert(false);
     }
     catch(std::string &se)
     {
-        CHECK(se.find(ERR_SQMC) != string::npos);
+        assert(se.find(ERR_SQMC) != string::npos);
     }
+
+    return test_pass;
 }
 
 // set wrong INDEX
-SUBCASE("negative_testing_set_wrong_index")
-{
+bool negative_testing_set_wrong_index() {
+
     run_direct_query(&sqc, "create or replace table t (x int not null)");
     new_query_execute(&sqc, "insert into t values (?)");
     sqc.set_int(0, 1);
     try
     {
         sqc.set_int(3, 3);
-        CHECK(false);
+        assert(false);
     }
     catch(std::string &se)
     {
-        CHECK(se.find(ERR_SQMC) != string::npos);
+        assert(se.find(ERR_SQMC) != string::npos);
     }
+
+    return test_pass;
 }
 
 // **** EyalW can not work for now -> we don't have names in the type in
 // set wrong NAME
-//SUBCASE("negative_testing_set_wrong_name)
+//bool "negative_testing_set_wrong_name)
 //{
 //    run_direct_query(&sqc, "create or replace table t (x int not null)");
 //    new_query_execute(&sqc, "insert into t values (?)");
@@ -1504,19 +1619,19 @@ SUBCASE("negative_testing_set_wrong_index")
 //    try
 //    {
 //        sqc.set_int("z", 3);
-//        CHECK(false);
+//        assert(false);
 //    }
 //    catch(std::string &se)
 //    {
 //        std::cout << se.c_str() << std::endl;
 //        // looking for ERR_INVALID_COLUMN_NAME
-//        CHECK(se.find(ERR_INVALID_COLUMN_NAME) != string::npos);
+//        assert(se.find(ERR_INVALID_COLUMN_NAME) != string::npos);
 //    }
 //}
 
 // get wrong INDEX
-SUBCASE("negative_testing_get_wrong_index")
-{
+bool negative_testing_get_wrong_index(){
+
     run_direct_query(&sqc, "create or replace table t (x int not null)");
     new_query_execute(&sqc, "insert into t values (?)");
     sqc.set_int(0, 0);
@@ -1528,18 +1643,21 @@ SUBCASE("negative_testing_get_wrong_index")
     try
     {
         sqc.get_int(1);
-        CHECK(false);
+        assert(false);
     }
     catch(std::string &se)
     {
         // looking for ERR_COLUMN_INDEX_OUT_OF_RANGE
-        CHECK(se.find(ERR_SQMC) != string::npos);
+        assert(se.find(ERR_SQMC) != string::npos);
     }
+
+    return test_pass;
 }
 
+
 // get wrong NAME
-SUBCASE("negative_testing_get_wrong_name")
-{
+bool negative_testing_get_wrong_name(){
+
     run_direct_query(&sqc, "create or replace table t (x int not null)");
     new_query_execute(&sqc, "insert into t values (?)");
     int val = rand();
@@ -1552,62 +1670,71 @@ SUBCASE("negative_testing_get_wrong_name")
     try
     {
         sqc.get_int("y");
-        CHECK(false);
+        assert(false);
     }
     catch(std::string &se)
     {
-        CHECK(se.find(ERR_SQMC) != string::npos);
+        assert(se.find(ERR_SQMC) != string::npos);
     }
+
+    return test_pass;
 }
 
 // call get function in the middle of insert statement
-SUBCASE("negative_testing_get_in_insert")
-{
+bool negative_testing_get_in_insert() {
+
     run_direct_query(&sqc, "create or replace table t (x int not null)");
     new_query_execute(&sqc, "insert into t values (?)");
     sqc.set_int(0, 1);
     try
     {
         sqc.get_int(0);
-        CHECK(false);
+        assert(false);
     }
     catch(std::string &se)
     {
-        CHECK(se.find(ERR_SQMC) != string::npos);
+        assert(se.find(ERR_SQMC) != string::npos);
     }
+
+    return test_pass;
 }
 
 // call set function in the middle of select statement
-SUBCASE("negative_testing_set_in_select")
-{
+bool negative_testing_set_in_select() {
+
     run_direct_query(&sqc, "create or replace table t (x int not null)");
     new_query_execute(&sqc, "select * from t");
     try
     {
         sqc.set_int(0, 1);
-        CHECK(false);
+        assert(false);
     }
     catch(std::string &se)
     {
-        CHECK(se.find(ERR_SQMC) != string::npos);
+        assert(se.find(ERR_SQMC) != string::npos);
     }
+
+    return test_pass;
 }
 
-SUBCASE("negative_testing_prepare_statement_mismatch_in_param")
-{
+bool negative_testing_prepare_statement_mismatch_in_param() {
+
     run_direct_query(&sqc, "create or replace table t (x int not null)");
     try
     {
         new_query_execute(&sqc, "insert into t values (?,?)");
-        CHECK(false);
+        assert(false);
     }
     catch(std::string &se)
     {
-        CHECK(se.find(ERR_SQMC) != string::npos);
+        assert(se.find(ERR_SQMC) != string::npos);
     }
+
+    return test_pass;
 }
 
-SUBCASE("negative_testing_int_insert_overwrite") {
+bool negative_testing_int_insert_overwrite() {
+
     run_direct_query(&sqc, "create or replace table t(x int not null,y int)");
     new_query_execute(&sqc, "insert into t values (?,?)");
     sqc.set_int(0,0);
@@ -1623,11 +1750,14 @@ SUBCASE("negative_testing_int_insert_overwrite") {
     }
     catch(std::string &se)
     {
-        CHECK(se.find(ERR_SQMC) != string::npos);
+        assert(se.find(ERR_SQMC) != string::npos);
     }
+
+    return test_pass;
 }
 
-SUBCASE("negative_testing_int_insert_null_overwrite") {
+bool negative_testing_int_insert_null_overwrite() {
+
     run_direct_query(&sqc, "create or replace table t(x int)");
     new_query_execute(&sqc, "insert into t values (?)");
     sqc.set_int(0,0);
@@ -1639,11 +1769,14 @@ SUBCASE("negative_testing_int_insert_null_overwrite") {
     }
     catch(std::string &se)
     {
-        CHECK(se.find(ERR_SQMC) != string::npos);
+        assert(se.find(ERR_SQMC) != string::npos);
     }
+
+    return test_pass;
 }
 
-SUBCASE("negative_testing_too_many_next_row_calls_on_select") {
+bool negative_testing_too_many_next_row_calls_on_select() {
+
     run_direct_query(&sqc, "create or replace table t(x int)");
     new_query_execute(&sqc, "insert into t values (?)");
     sqc.set_int(0,666);
@@ -1656,10 +1789,17 @@ SUBCASE("negative_testing_too_many_next_row_calls_on_select") {
     }
     catch(std::string &se)
     {
-        CHECK(se.find(ERR_SQMC) != string::npos);
+        assert(se.find(ERR_SQMC) != string::npos);
     }
+
+    return test_pass;
 }
 
-} // SUBCASE ("Runtime test suite") 
 
-// BOOST_AUTO_TEST_SUITE_END()
+int main () {
+
+    //  --- Setup for all tests
+    setup_tests();
+
+    simple();
+}

@@ -60,13 +60,18 @@ void sqream::connection_t::connect(const std::string &ipv4,int port,bool ssl)
     /// <li>const std::string &ipv4:&emsp; ipv4 address of the sqreamd</li>
     /// <li>int port:&emsp; port of the sqreamd</li>
     /// </ul>
+    printf  ("connection_t connect start\n");
+
     if(socket) disconnect();
     socket=new(std::nothrow) TSocketClient(ipv4.c_str(),port,ssl);
+
     if(socket->SockCreateAndConnect()==false)
     {
         socket=nullptr;
         THROW_GENERAL_ERROR("unable to create socket");
     }
+    printf  ("connection_t connect end\n");
+
 }
 
 void sqream::connection_t::disconnect()
@@ -182,9 +187,17 @@ static void rxtx(sqream::connector *conn, json *reply_json,const char input[]) /
     /// <li>json &reply_json:&emsp; JSON reply message from sqreamd</li>
     /// <li>const char input[]:&emsp; JSON message to sqreamd</li>
     /// </ul>
+    printf("rxtx start \n");
+
     std::vector<char> reply_msg;
+    printf("rxtx start 2\n");
+    
     conn->host.write(input,strlen(input),sqream::HEADER::HEADER_JSON);
+        printf("con1 \n");
+    
     conn->host.read(reply_msg);
+        printf("con1 \n");
+    
     if(!(reply_json->parse(std::string(reply_msg.begin(),reply_msg.end()).c_str()))) THROW_GENERAL_ERROR("could not parse server response");
 }
 
@@ -219,8 +232,11 @@ bool sqream::connector::connect(const std::string &ipv4,int port,bool ssl,const 
     /// </ul>
     /// <b>return</b>(uint32_t):&emsp; connection_id
     host.connect(ipv4,port,ssl);
+
     json reply_json;
-    rxtx(this,&reply_json,MESSAGES::connectDatabase,service.c_str(),username.c_str(),password.c_str(),database.c_str());
+    printf  ("connector connect start\n");
+    rxtx(this, &reply_json, MESSAGES::connectDatabase, service.c_str(), username.c_str(), password.c_str(), database.c_str());
+    printf  ("connector connect start2\n");
     ipv4_=ipv4;
     port_=port;
     ssl_=ssl;
@@ -510,7 +526,10 @@ bool sqream::driver::connect(const std::string &ipv4,int port,bool ssl,const std
     if(sqc_) disconnect();
     sqc_=new(std::nothrow) connector;
     if(!sqc_) THROW_GENERAL_ERROR("error creating connection");
+    printf  ("driver connect\n");
     bool retval=sqc_->connect(ipv4,port,ssl,username,password,database,service);
+    printf  ("driver connect end\n");
+
     return retval;
 }
 
