@@ -20,6 +20,13 @@
 #define ERR_WRONG_STATEMENT_TYPE        "Wrong statement type"
 #define ERR_SQMC                        "SQream-cpp-connector.cc:"
 
+// -- Output macros
+#define ping puts("ping");
+#define puts(str) puts(str);
+#define putss(str) puts(str.c_str());
+#define putj(jsn) puts(jsn.dump().c_str());
+
+
 using namespace std;
 namespace con = sqream;
 
@@ -242,23 +249,21 @@ bool setup_tests (string ip = "127.0.0.1", int port = 5001, bool ssl = true){
 
     auto argc = 5;
     unsigned int seed = time(nullptr);
-    printf("seed is %ud\n", seed);
     srand(seed);
-    printf ("fekbet\n");
-
-    sqc.connect(ip, port, ssl, "sqream", "sqream", "master");
-    printf ("fekbet2\n");
-
+    // sqc.connect(ip, port, ssl, "sqream", "sqream", "master");
+    /*
     try {
-            printf ("fekbet3\n");
-
+        printf ("b4 run_direct_query\n");
         run_direct_query(&sqc, str("drop database ", db_name));
-    printf ("fekbet4\n");
+        printf ("after run_direct_query\n");
 
         sqc.finish_query();
     }
     catch (...) {}
-    run_direct_query(&sqc, str("create database ", db_name));
+    //*/
+    // printf ("b4 run_direct_query\n");
+
+    // run_direct_query(&sqc, str("create database ", db_name));
     sqc.connect(ip, port, ssl, "sqream", "sqream", db_name);
 
     return test_pass;
@@ -289,14 +294,18 @@ bool "explicit_connection_disconnection") {
 
 bool simple() {
 
-    printf("fud");
+    puts("\n```    start simple test");
     run_direct_query(&sqc, "create or replace table t(x int not null)");
-    printf("fud2");
+    puts("\n```    simple test after create statement");
     new_query_execute(&sqc, "insert into t values(?)");
+    puts("\n```    simple test after insert statement");
     int val = rand();
     sqc.set_int(0, val);
     sqc.next_query_row();
+    ping
     sqc.finish_query();
+    ping
+    puts("```    simple test after create");
 
     new_query_execute(&sqc, "select * from t");
     int row_count = 0;
@@ -307,6 +316,7 @@ bool simple() {
     }
     assert(row_count == 1);
     sqc.finish_query();
+    puts("```    end simple test");
 
     return test_pass;
 }
@@ -1800,6 +1810,10 @@ int main () {
 
     //  --- Setup for all tests
     setup_tests();
-
-    simple();
+    try {
+        simple();
+    }
+    catch (std::string e) {
+        puts(e.c_str());
+    }
 }

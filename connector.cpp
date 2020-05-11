@@ -5,7 +5,7 @@
 #include "connector.h"
 #include "socket.hpp"
 #include "json.hpp"
-
+#include <exception>
 /*
 #include <kissnet.hpp>
 namespace sock = kissnet;
@@ -14,6 +14,11 @@ namespace sock = kissnet;
 /// Macro to format and throw errors
 #define THROW_GENERAL_ERROR(MSG) throw std::string(__FILE__":")+std::to_string(__LINE__)+std::string(" in ")+std::string(__func__)+std::string("(): ")+std::string(MSG)
 #define THROW_SQREAM_ERROR(MSG) throw std::string(__FILE__":")+std::to_string(__LINE__)+std::string(" in ")+std::string(__func__)+std::string("() returned error from SQream: ")+std::string(MSG)
+
+#define ping puts("ping");
+#define puts(str) puts(str);
+#define putss(str) puts(str.c_str());
+#define putj(jsn) puts(jsn.dump().c_str());
 
 ///Linux-Windows snprintf variant
 #ifdef __linux__
@@ -178,7 +183,23 @@ sqream::connector::~connector()
     else THROW_GENERAL_ERROR("an unknown error occured");\
 }
 
-static void rxtx(sqream::connector *conn, json *reply_json,const char input[]) ///< <h3>Method to send and receive formatted messages</h3>
+
+bool verify_response(json& reply_json, std::string value) {
+
+    if(reply_json.contains(value)) 
+        return (reply_json[value] == value);
+    else if(reply_json.contains("error")) { 
+        THROW_SQREAM_ERROR(reply_json["error"]);
+    }else {
+        puts("verify else clause");
+        putss(value)
+        puts(reply_json.dump().c_str());
+        THROW_GENERAL_ERROR("an unknown error occured");
+    }
+}
+
+
+static void rxtx(sqream::connector *conn, json& reply_json,const char input[]) ///< <h3>Method to send and receive formatted messages</h3>
 {
     /// <i>Routine to perform a send and receive of formatted JSON messages</i><br>
     /// <b>input:</b>
@@ -187,21 +208,18 @@ static void rxtx(sqream::connector *conn, json *reply_json,const char input[]) /
     /// <li>json &reply_json:&emsp; JSON reply message from sqreamd</li>
     /// <li>const char input[]:&emsp; JSON message to sqreamd</li>
     /// </ul>
-    printf("rxtx start \n");
 
     std::vector<char> reply_msg;
-    printf("rxtx start 2\n");
     
     conn->host.write(input,strlen(input),sqream::HEADER::HEADER_JSON);
-        printf("con1 \n");
-    
     conn->host.read(reply_msg);
-        printf("con1 \n");
     
-    if(!(reply_json->parse(std::string(reply_msg.begin(),reply_msg.end()).c_str()))) THROW_GENERAL_ERROR("could not parse server response");
+    // add catch error - https://github.com/nlohmann/json/blob/develop/doc/examples/parse_error.cpp
+    reply_json = json::parse(std::string(reply_msg.begin(),reply_msg.end()).c_str()); // THROW_GENERAL_ERROR("could not parse server response");
 }
 
-template<typename ...Args> void rxtx(sqream::connector *conn, json *reply_json,const char input[],Args...args) ///< <h3>Method to send and receive unformatted messages</h3>
+template<typename ...Args> 
+void rxtx(sqream::connector *conn, json& reply_json,const char input[],Args...args) ///< <h3>Method to send and receive unformatted messages</h3>
 {
     /// <i>Routine to perform a send and receive of unformatted JSON messages</i><br>
     /// <b>input:</b>
@@ -215,7 +233,10 @@ template<typename ...Args> void rxtx(sqream::connector *conn, json *reply_json,c
     sqream::MESSAGES::format(msg,input,args...);
     conn->host.write(msg.data(),msg.size(),sqream::HEADER::HEADER_JSON);
     conn->host.read(reply_msg);
-    if(!(reply_json->parse(std::string(reply_msg.begin(),reply_msg.end()).c_str()))) THROW_GENERAL_ERROR("could not parse server response");
+    
+    // add catch error - https://github.com/nlohmann/json/blob/develop/doc/examples/parse_error.cpp
+    reply_json = json::parse(std::string(reply_msg.begin(),reply_msg.end()).c_str()); //THROW_GENERAL_ERROR("could not parse server response");
+
 }
 
 bool sqream::connector::connect(const std::string &ipv4,int port,bool ssl,const std::string &username,const std::string &password,const std::string &database,const std::string &service)
@@ -235,8 +256,7 @@ bool sqream::connector::connect(const std::string &ipv4,int port,bool ssl,const 
 
     json reply_json;
     printf  ("connector connect start\n");
-    rxtx(this, &reply_json, MESSAGES::connectDatabase, service.c_str(), username.c_str(), password.c_str(), database.c_str());
-    printf  ("connector connect start2\n");
+    rxtx(this, reply_json, MESSAGES::connectDatabase, service.c_str(), username.c_str(), password.c_str(), database.c_str());
     ipv4_=ipv4;
     port_=port;
     ssl_=ssl;
@@ -245,25 +265,29 @@ bool sqream::connector::connect(const std::string &ipv4,int port,bool ssl,const 
     database_=database;
     service_=service;
     var_encoding_= "ascii";
-
     if(reply_json.contains("varcharEncoding"))
     {
         var_encoding_ = reply_json["varcharEncoding"];          // std::string var_encoding_
     }
+    printf  ("connector connect mid parse\n");
 
     if(reply_json.contains("connectionId"))
     {
         connection_id_ = reply_json["connectionId"];  // uint32_t connection_id_
+        printf  ("has connectionId\n");
         return true;
     }
-    else return false;
+    else {
+        printf  ("no connectionId\n");
+        return false;
+    }
 }
 
 bool sqream::connector::reconnect(const std::string &ipv4,int port,int listener_id)
 {
     host.connect(ipv4,port,ssl_);
     json reply_json;
-    rxtx(this,&reply_json,MESSAGES::reconnectDatabase,database_.c_str(),service_.c_str(),connection_id_,username_.c_str(),password_.c_str(),listener_id);
+    rxtx(this, reply_json,MESSAGES::reconnectDatabase,database_.c_str(),service_.c_str(),connection_id_,username_.c_str(),password_.c_str(),listener_id);
     return reply_json.contains("databaseConnected");
 }
 
@@ -272,7 +296,7 @@ bool sqream::connector::open_statement()
     /// <i>Connector routine that opens a new statement on sqreamd</i><br>
     /// <b>return</b>(uint32_t):&emsp; statement_id
     json reply_json;
-    rxtx(this,&reply_json,MESSAGES::getStatementId);
+    rxtx(this, reply_json,MESSAGES::getStatementId);
     if(reply_json.contains("statementId"))
     {
         statement_id_=reply_json["statementId"];
@@ -281,8 +305,7 @@ bool sqream::connector::open_statement()
     else return false;
 }
 
-bool sqream::connector::prepare_statement(std::string sqlQuery,int chunk_size)
-{
+bool sqream::connector::prepare_statement(std::string sqlQuery,int chunk_size) {
     /// <i>Connector routine that prepares a statement on sqreamd</i><br>
     /// <b>input:</b>
     /// <ul>
@@ -290,25 +313,29 @@ bool sqream::connector::prepare_statement(std::string sqlQuery,int chunk_size)
     /// <li>int chunk_size:&emsp; this parameter is unparsed</li>
     /// </ul>
     /// <b>return</b>(bool):&emsp; success from server
+    printf ("prepare_statement start\n");
     json reply_json, prepare_json;
     prepare_json["prepareStatement"] = sqlQuery;
     prepare_json["chunkSize"] = chunk_size;
-	rxtx(this, &reply_json, prepare_json.dump().c_str());
+	rxtx(this, reply_json, prepare_json.dump().c_str());
 
-    if(reply_json.contains("reconnect") and (reply_json["reconnect"] == true))
-    {
-
-        if((reply_json.contains("port") or reply_json.contains("port_ssl")) and reply_json.contains("ip") and reply_json.contains("listener_id"))
-        {
+    if(reply_json.contains("reconnect") and (reply_json["reconnect"] == true)) {     
+        if((reply_json.contains("port") or reply_json.contains("port_ssl")) and reply_json.contains("ip") and reply_json.contains("listener_id")) {
             const int port = ssl_ ? reply_json["port_ssl"] : reply_json["port"];
             if(reconnect(reply_json["ip"], port, reply_json["listener_id"]));
             else THROW_GENERAL_ERROR("reconnection failed");
         }
         else THROW_GENERAL_ERROR("could not parse reconnection message");
-        rxtx(this,&reply_json,MESSAGES::reconstructStatement,statement_id_);
-        ERR_HANDLE_STR(statementReconstructed)
+        rxtx(this, reply_json, MESSAGES::reconstructStatement,statement_id_);
+        puts("prepare_statement reconnect after rxtx ");
+        putj(reply_json)
+        // ERR_HANDLE_STR(statementReconstructed)
+        return verify_response(reply_json, "statementReconstructed");
     }
-    else ERR_HANDLE(statementPrepared,GetBool)
+    else{ 
+        printf ("prepare_statement no reconnect\n");
+        ERR_HANDLE(statementPrepared,GetBool)
+    }
 }
 
 sqream::CONSTS::statement_type sqream::connector::metadata_query(std::vector<column> &columns_metadata_in,std::vector<column> &columns_metadata_out)
@@ -329,7 +356,7 @@ sqream::CONSTS::statement_type sqream::connector::metadata_query(std::vector<col
     columns_metadata_in.clear();
     CONSTS::statement_type retval=CONSTS::statement_type::unset;
     json queryTypeOut_reply_json;
-    rxtx(this,&queryTypeOut_reply_json,MESSAGES::queryTypeOut);
+    rxtx(this, queryTypeOut_reply_json,MESSAGES::queryTypeOut);
     if(queryTypeOut_reply_json.contains("queryTypeNamed") and queryTypeOut_reply_json["queryTypeNamed"].is_array() and queryTypeOut_reply_json["queryTypeNamed"].size())
     {
         retval=CONSTS::statement_type::select;
@@ -355,7 +382,7 @@ sqream::CONSTS::statement_type sqream::connector::metadata_query(std::vector<col
     else
     {
         json queryTypeIn_reply_json;
-        rxtx(this,&queryTypeIn_reply_json,MESSAGES::queryTypeIn);
+        rxtx(this, queryTypeIn_reply_json,MESSAGES::queryTypeIn);
         if(queryTypeIn_reply_json.contains("queryType") and queryTypeIn_reply_json["queryType"].is_array() and queryTypeIn_reply_json["queryType"].size())
         {
             retval=CONSTS::statement_type::insert;
@@ -386,8 +413,15 @@ bool sqream::connector::execute()
     /// <i>Connector routine that tells the server to execute a statement</i><br>
     /// <b>return</b>(bool):&emsp; success response from sqreamd
     json reply_json;
-    rxtx(this,&reply_json,MESSAGES::execute);
-    ERR_HANDLE_STR(executed)
+    puts ("execute start");
+    rxtx(this, reply_json,MESSAGES::execute);
+    puts ("execute after rxtx");
+
+    // ERR_HANDLE_STR(executed)
+    bool res = verify_response(reply_json, "executed");
+    return res;
+    // puts ("execute end");
+
 }
 
 size_t sqream::connector::fetch(std::vector<char> &binary_data,std::vector<uint64_t> &column_sizes,size_t min_size)
@@ -405,7 +439,7 @@ size_t sqream::connector::fetch(std::vector<char> &binary_data,std::vector<uint6
     size_t row_count=0;
     while(binary_data.size()<min_size)
     {
-        rxtx(this,&reply_json,MESSAGES::fetch);
+        rxtx(this, reply_json,MESSAGES::fetch);
         if(reply_json.contains("colSzs") and reply_json.contains("rows"))
         {
             if(reply_json["colSzs"].is_array() and reply_json["colSzs"].size())
@@ -459,8 +493,9 @@ bool sqream::connector::close_statement()
     /// <i>Connector routine that closes a statement indicating it will not be used again</i><br>
     /// <b>return</b>(bool):&emsp; success response from sqreamd
     json reply_json;
-    rxtx(this,&reply_json,MESSAGES::closeStatement);
-    ERR_HANDLE_STR(statementClosed)
+    rxtx(this, reply_json,MESSAGES::closeStatement);
+    // ERR_HANDLE_STR(statementClosed)
+    return verify_response(reply_json, "statementClosed");
 }
 
 #undef ERR_HANDLE
@@ -526,7 +561,7 @@ bool sqream::driver::connect(const std::string &ipv4,int port,bool ssl,const std
     if(sqc_) disconnect();
     sqc_=new(std::nothrow) connector;
     if(!sqc_) THROW_GENERAL_ERROR("error creating connection");
-    printf  ("driver connect\n");
+    puts  ("\ndriver connect start");
     bool retval=sqc_->connect(ipv4,port,ssl,username,password,database,service);
     printf  ("driver connect end\n");
 
@@ -641,17 +676,22 @@ void sqream::driver::new_query(const std::string &sql_query)
     /// <ul>
     /// <li>const std::string &sql_query:&emsp; SQream SQL Query</li>
     /// </ul>
+    printf ("new_query start\n");
     TC(sqc_)
     state_=0;
     row_count_=0;
     current_row_=0;
     curr_buff_idx = 0;
+
     buffer_.clear();
     column_sizes_.clear();
     colck_.clear();
     sqc_->open_statement();
+    printf ("new_query before prepare_statement\n");
     if(!sqc_->prepare_statement(sql_query,57/*Grothendieck prime*/)) THROW_GENERAL_ERROR("error preparing statement");
     state_|=1;
+    printf ("new_query end\n");
+
 }
 
 bool sqream::driver::execute_query()
@@ -663,9 +703,12 @@ bool sqream::driver::execute_query()
     /// <li>const std::string &sql_query:&emsp; SQream SQL Query</li>
     /// </ul>
     TCCS(sqc_,1)
+    printf ("execute_query before execute()\n");
     if(sqc_->execute())
     {
+        printf ("execute_query after execute()\n");
         statement_type_=sqc_->metadata_query(metadata_input_,metadata_output_);
+        
         switch(statement_type_)
         {
             case CONSTS::insert:
@@ -680,7 +723,11 @@ bool sqream::driver::execute_query()
         state_|=2;
         return true;
     }
-    else THROW_GENERAL_ERROR("failed to execute query");
+    else {
+        puts("execute_query execute returned false");
+        throw std::string("failed to execute query");
+        // THROW_GENERAL_ERROR("failed to execute query");
+    }
 }
 
 bool sqream::driver::next_query_row(const size_t min_put_size)
@@ -753,19 +800,23 @@ bool sqream::driver::finish_query()
 {
     /// <i>This driver retrieves or sends data per row</i><br>
     /// This function can only be executed after a execute_query() call
+    puts("finish_query start")
     if(state_==3) state_|=4;
     TCCS(sqc_,7)
-    if(statement_type_==CONSTS::insert)
-    {
-        if(buffer_switch_th)
-        {
+    if(statement_type_==CONSTS::insert) {
+        ping
+        if(buffer_switch_th) {
             //std::printf("Ending previous buff switch\n");
             (*buffer_switch_th).get();
             buffer_switch_th.reset(nullptr);
         }
-        if(flat_size_())
+        ping
+        if(flat_size_()) {
+            ping
             put_buff(row_count_, curr_buff_idx.load());
+        }
     }
+
     state_|=8;
     return sqc_->close_statement();
 }
@@ -1413,8 +1464,7 @@ sqream::datetime_t sqream::make_datetime(uint64_t datetime)
     return retval;
 }
 
-void sqream::new_query_execute(driver *drv,std::string sql_query)
-{
+void sqream::new_query_execute(driver *drv, std::string sql_query) {
     /// <i>operates the protocol using a connector driver to prepare and execute a query but stops before closing to permit fetching or putting (enables networking insert)</i><br>
     /// <b>input:</b>
     /// <ul>
@@ -1424,8 +1474,12 @@ void sqream::new_query_execute(driver *drv,std::string sql_query)
     TC(drv->sqc_)
     try
     {
+        printf ("\n-- new_query_execute before new_query\n");
         drv->new_query(sql_query);
+        printf ("\n-- new_query_execute after new_query\n");
         drv->execute_query();
+        printf ("\n-- new_query_execute after execute\n");
+
     }
     catch(std::string &err)
     {
@@ -1433,23 +1487,24 @@ void sqream::new_query_execute(driver *drv,std::string sql_query)
         drv->sqc_->close_statement();
         THROW_GENERAL_ERROR(err.c_str());
     }
+    puts("new_query_execute end");
 }
+
 
 void sqream::run_direct_query(driver *drv,std::string sql_query)
 {
-    if(drv)
-    {
-        try
-        {
-            new_query_execute(drv,sql_query);
-            drv->finish_query();
-        }
-        catch(std::string &err)
-        {
-            THROW_GENERAL_ERROR(err.c_str());
-        }
+    if(not drv) 
+        THROW_GENERAL_ERROR("sqream driver is not initialized");
+        printf ("we twaa so haaaad\n");
+
+    try {
+        new_query_execute(drv,sql_query);
+        printf ("we twaa direct query\n");
+        drv->finish_query();
     }
-    else THROW_GENERAL_ERROR("sqream driver is not initialized");
+    catch(std::string &err) {
+        THROW_GENERAL_ERROR(err.c_str());
+    }
 }
 
 std::vector<sqream::column> sqream::get_metadata(driver *drv)
