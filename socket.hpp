@@ -6,24 +6,6 @@
 #include <winsock.h>
 #endif
 
-// ------------ Original Socket.hpp and socket.hxx ----------------------
-// ----------------------------------------------------------------------
-// ---------------------------------------------------------------------------------
-//
-// File:    SOCK_CLI.HPP
-//
-//
-// Notes:   Socket client class definition
-//          Main file           - SOCK_CLI.CPP    
-//          Inline functions    - SOCK_CLI.HXX
-//          Message             - --SIGNATURE-- content --SIGNATURE--
-//          Signature is defined as MSG_SOCK_SIGN constant
-//
-//          This class is used by our driver via XMLNode class to
-//          stream a request to the server.
-//
-// ----------------------------------------------------------------------------------
-
 
 #ifndef __linux__
 #pragma comment(lib, "Ws2_32.lib")
@@ -67,32 +49,17 @@ typedef size_t sock_buf_size;
 struct ssl_st;
 typedef struct ssl_st SSL;
 
-struct TSocketClient
-{
+struct TSocketClient {
 
 public:
-
-        // member functions
-        std::tuple<int, std::string, bool>            GetParamsFromPicker(void);
 
         bool            Initialize              ( const char* pServer, int pPort  );
         bool            SockCreateAndConnect    ( void );                                                                 // create and connect via socket    
         bool            SockWriteChunk          ( const void* pBuffer, size_t pChunkSize, int& pBytesWritten );              // write a chunk to socket
         bool            SockReadChunk           ( char* pBuffer, int& pBytesRead, int pChunkSize );                       // read a chunk from socket 
-        bool            SockReadFullMsg         ( char*& pBuffer, int& pMsgSize, int pDefChunkSize = DEF_CHUNK_SIZE );    // read the complete msg 
-        bool            SockReadHTTPResponse    ( char*& pBuffer, int& pMsgSize, int pDefChunkSize = DEF_CHUNK_SIZE );    // read the complete HTTP response
-
-        bool            WriteSignature          ( void );           // writes the start signature
-
         void            SockClose               ( void );           // closes the existing open socket if any    
 
-        // common functions
-
-inline  const char*     GetErrMsg               ( void );           // get the last error that occured
-inline  bool            IsReady                 ( void );           // check if class is initialized properly
-
         // constructors - destructor
-
         TSocketClient   ( bool is_ssl_ );                            // default constructor    
         TSocketClient   ( const char* pServer, int pPort , bool is_ssl_ );              // constructor
         ~TSocketClient  ();                                         // destructor       
@@ -130,50 +97,8 @@ static  int     SockInitLib             ( short pMajorVersion = 1, short pMinorV
 static  bool    SockFinalizeLib         ( void );
 };
 
-// ---------------------------- include inline functions ---------------------------
-//                        ------------ "socket.hxx" ----------------
-
-// ---------------------------------------------------------------------------------
-//
-// File:    SOCK_CLI.HXX
-//
-//
-// Notes:   Socket client class inline functions
-//
-// ----------------------------------------------------------------------------------
-
-#ifndef _SOCK_CLI_HXX
-#define _SOCK_CLI_HXX
-
-
-// --------------------------------------------------------------------
-// to check if the class=>socket is properly initialized
-// --------------------------------------------------------------------
-
-bool TSocketClient::IsReady ( void )
-{
-    // check if listener socket is ready
-    return ( TSocketClient::g_flgLibReady == 1 && vSocket != 0  ) ? true : false;
-}
-
-
-// --------------------------------------------------------------------
-// get the last error that occured
-// --------------------------------------------------------------------
-
-inline const char* TSocketClient::GetErrMsg ( void )
-{
-    return vszErrMsg;
-}
-
-
-#endif   // of hxx
 
 #endif   // of hpp
-
-
-// ------------ Original Socket.hpp and socket.hxx ----------------------
-// ----------------------------------------------------------------------
 
 
 #include <errno.h>
@@ -182,20 +107,14 @@ inline const char* TSocketClient::GetErrMsg ( void )
 //#include <openssl/err.h>
 //#include <openssl/ossl_typ.h>
 
-ssize_t TSocketClient::sock_recv (char *__buf, sock_buf_size __n)
-{
-    if (is_ssl)
-        return SSL_read (ssl, __buf, __n);
-    else
-        return recv (vSocket, __buf, __n, 0);
+ssize_t TSocketClient::sock_recv (char *__buf, sock_buf_size __n) {
+
+    return (is_ssl) ? SSL_read(ssl, __buf, __n) : recv(vSocket, __buf, __n, 0);
 }
 
-ssize_t TSocketClient::sock_send(const char *__buf, sock_buf_size __n)
-{
-    if (is_ssl)
-        return SSL_write (ssl, __buf, __n);
-    else
-        return send (vSocket, __buf, __n, 0);
+ssize_t TSocketClient::sock_send(const char *__buf, sock_buf_size __n) {
+
+        return (is_ssl) ? SSL_write(ssl, __buf, __n) : send(vSocket, __buf, __n, 0);
 }
 
 // ----------------- static data members initialization ------------------
@@ -270,9 +189,6 @@ bool TSocketClient::Initialize ( const char* pServer, int pPort  )
 }
 
 
-
-
-
 // --------------------------------------------------------------------
 // default constructor, does nothing besides a rest
 // --------------------------------------------------------------------
@@ -316,11 +232,11 @@ TSocketClient::~TSocketClient  ()
 
 
 // --------------------------------------------------------------------
-// STATIC, to initialize the windows socket library ( requirement for winsock )
+// Linux variant of SockInitLib
 // --------------------------------------------------------------------
 
-int TSocketClient::SockInitLib ( short pMajorVersion, short pMinorVersion )
-{
+int TSocketClient::SockInitLib ( short pMajorVersion, short pMinorVersion ) {
+    /** Not in use by the connector */
 
     // check if already initialized
     if ( TSocketClient::g_flgLibReady == 1 )
@@ -351,11 +267,12 @@ int TSocketClient::SockInitLib ( short pMajorVersion, short pMinorVersion )
 }
 
 // --------------------------------------------------------------------
-// to finalize the windows socket library
+// Linux variant of SockFinalizeLib
 // --------------------------------------------------------------------
 
-bool TSocketClient::SockFinalizeLib ( void )
-{
+bool TSocketClient::SockFinalizeLib ( void ) {
+    /** Not in use by the connector */
+
     // note
     // applications must make sure that all sockets are closed
     // since this is a static member function and does not
@@ -437,8 +354,8 @@ bool TSocketClient::SockFinalizeLib ( void )
 // to create a socket and connect to the server using specified sockaddr
 // --------------------------------------------------------------------
 
-bool TSocketClient::SockCreateAndConnect ( void )
-{
+bool TSocketClient::SockCreateAndConnect ( void ) {
+
     int         iStatus;
     SOCKET      s;
 
@@ -447,7 +364,7 @@ bool TSocketClient::SockCreateAndConnect ( void )
 
     // PRECAUTION
 
-    if ( TSocketClient::g_flgLibReady == 0 || vSockAddr.sin_addr.s_addr == 0 ) {
+    if (TSocketClient::g_flgLibReady == 0 || vSockAddr.sin_addr.s_addr == 0 ) {
 
         SetErrMsg ( false, "Winsock/SockAddr not initialized" );
         return false;
@@ -503,94 +420,9 @@ bool TSocketClient::SockCreateAndConnect ( void )
             return false;
         }
     }
-    
+
     return true;
-}
-
-
-// --------------------------------------------------------------------
-// to create a socket and connect to the server using specified sockaddr
-// --------------------------------------------------------------------
-// send ip + port
-std::tuple<int ,std::string,bool> TSocketClient::GetParamsFromPicker(void)
-{
-    int         iStatus;
-    SOCKET      s;
-
-    // note
-    // create and connect r merged due to nature of client application
-
-    // PRECAUTION
-
-    if (TSocketClient::g_flgLibReady == 0 || vSockAddr.sin_addr.s_addr == 0) {
-
-        SetErrMsg(false, "Winsock/SockAddr not initialized");
-        return std::make_tuple(0, std::string(""), false);
-    }
-
-    // CREATE
-
-    // create a new stream socket
-    s = socket(AF_INET, SOCK_STREAM, 0);
-    if (s == INVALID_SOCKET) {
-
-        SetErrMsg(true, "WSASocket failed");
-        return std::make_tuple(0, std::string(" "), false);
-    }
-
-    // CONNECT
-    
-    // connect using the already prepared address
-    std::unique_ptr <char[]> s_ip;
-    char message_size[4] = { 0 };
-    char s_port[4] = { 0 };
-    int port;
-    int m_size = 0;
-    iStatus = connect(s, (struct sockaddr*)&vSockAddr, sizeof(vSockAddr));
-    if (iStatus >= 0)
-    {
-
-        //get bffer size;
-        recv(s, message_size, 4, 0);
-
-        //m_size = atoi(message_size);
-        m_size = *((int*)message_size) + 1;
-        s_ip = std::unique_ptr<char[]>(new char[m_size]);
-        memset(s_ip.get(), 0, m_size);
-        recv(s, s_ip.get(), m_size - 1, 0);
-        recv(s, s_port, 4, 0);
-        port = *((int*)s_port);
-
-    }
-    
-    
-        
-    
-
-#ifdef __linux__
-
-        close(s);//   windows clean-up
-#else
-        closesocket(s);
-#endif
-        vSocket = s;
-        if (iStatus == -1)
-        {
-            SetErrMsg(true, "WSAConnect failed - %d\n ", errno);
-            return std::make_tuple(0, std::string(""), false);
-        }
-    
-        return std::make_tuple(port, std::string(s_ip.get()), true);
-
-    // SUCCESS
-
-    
-    
-    
-}
-
-
-
+} //TSocketClient::SockCreateAndConnect
 
 
 // --------------------------------------------------------------------
@@ -606,7 +438,7 @@ bool TSocketClient::SockWriteChunk (const void* pBuffer, size_t pChunkSize, int&
     pBytesWritten = 0;
 
     // precaution -------- class level
-    if ( !IsReady()) {
+    if ( !(TSocketClient::g_flgLibReady == 1 and vSocket != 0)) {
 
         SetErrMsg ( false, "Winsock/Class not initialized" );
         return false;
@@ -618,9 +450,6 @@ bool TSocketClient::SockWriteChunk (const void* pBuffer, size_t pChunkSize, int&
         SetErrMsg ( false, "SockWriteChunk, bad params" );      // zero bytes write is NOT an error
         return false;
     }
-
-    
-    
 
     // send
     iStatus = (int)sock_send ( (char*)pBuffer, pChunkSize);
@@ -650,7 +479,7 @@ bool TSocketClient::SockReadChunk ( char* pBuffer, int& pBytesRead, int pChunkSi
     pBytesRead = 0;
 
     // precaution --------- class level
-    if ( !IsReady()) {
+    if ( !(TSocketClient::g_flgLibReady == 1 and vSocket != 0)) {
 
         SetErrMsg ( false, "Winsock/Class not initialized" );
         return false;
@@ -662,8 +491,6 @@ bool TSocketClient::SockReadChunk ( char* pBuffer, int& pBytesRead, int pChunkSi
         SetErrMsg ( false, "SockReadChunk, bad params" );           // zero bytes read is NOT an error
         return false;
     }
-
-    // other initializations
 
     // recv
 
@@ -700,173 +527,18 @@ bool TSocketClient::SockReadChunk ( char* pBuffer, int& pBytesRead, int pChunkSi
 
 
 // --------------------------------------------------------------------
-// to read a complete signed message from a socket
-// --------------------------------------------------------------------
-
-bool TSocketClient::SockReadFullMsg ( char*& pBuffer, int& pMsgSize, int pDefChunkSize )
-{
-    bool   flgComplete;
-    bool   flgError;
-    bool   flgSignedMsg;          // message is a signed one
-    bool   flgSignChecked;        // message start has been checked for a sign
-
-    bool   iStatus; 
-
-    int    iChunkSize;
-    int    iCurrBytesRead, iTotalBytesRead;
-    int    nBytesAvailable;
-
-    char*  tmp; 
-    char*  buf;                  // final buf, to be returned to caller
-
-    // note
-    // the function receives msgs in 2 modes. 1. Signed message, 2. Raw msg
-    // Case signed message: it will read till it receives signature again
-    // Case Raw msg: it will read till it can peek 
-    // The signature is not a part of the block returned to caller
-    // the raw message feature is not very reliable
-
-    // initialization for caller parameters
-    pBuffer     = NULL;
-    pMsgSize    = 0;
-
-    // local initializations
-    tmp             = NULL;
-    buf             = NULL;
-    iTotalBytesRead = 0;
-    nBytesAvailable = 0;
-
-    flgComplete     = false;
-    flgError        = false;
-    flgSignedMsg    = false;
-    flgSignChecked  = false;
-
-    // determine the chunk size
-    iChunkSize = ( pDefChunkSize <= 0 ) ? DEF_CHUNK_SIZE : pDefChunkSize;
-
-    // loop to read from socket in chunks
-    while( !flgComplete && !flgError ) {
-
-        // increase buffer size to read next chunk
-        tmp = buf;                                     // save existing buffer
-        buf = new char[iTotalBytesRead+iChunkSize];
-
-        // preserve the existing data and release the old buffer
-        if( tmp ) {
-
-            memcpy( buf, tmp, iTotalBytesRead );
-            delete[] tmp;   
-            tmp = NULL;
-        }
-
-        // read the chunk
-        iStatus = SockReadChunk ( buf+iTotalBytesRead, iCurrBytesRead, iChunkSize );
-
-        // check if IO failed
-        if( iStatus != true ) {
-            flgError = true;
-            continue;
-        }
-        else {
-            // printbuffer( "Read chunk", buf+iTotalBytesRead, iCurrBytesRead );            // ????? debug
-            // printf ( "Read chunk: %d, Total: %d\n", iCurrBytesRead, iTotalBytesRead );   // ????? debug
-            iTotalBytesRead += iCurrBytesRead;  // increase the total number of bytes read
-        }
-
-        // IO succeeded
-        // 1. check for start signature if enough data
-        // 2. check for end signature if enough data
-        // 3. check for end thru peek if an un-signed message with enough data
-
-        // check START signature only if sufficient data & not checked
-        if( !flgSignChecked &&
-            iTotalBytesRead >= MSG_SOCK_SIGN_SIZE ) {
-
-                // first mark the message as checked for signature
-                flgSignChecked = true;
-
-                // check if start of msg is valid signature
-                if( memcmp( buf, MSG_SOCK_SIGN, MSG_SOCK_SIGN_SIZE ) == 0 )
-                    flgSignedMsg = true;             // mark the message as signed
-
-                // if( flgSignedMsg )  printf( "\nMessage is signed\n\n" );  
-                // else printbuffer( "Chunk", buf, iTotalBytesRead );
-        }
-
-        // check END with signature only if sufficient data & msg is signed
-        if( flgSignedMsg == true && 
-            iTotalBytesRead >= (MSG_SOCK_SIGN_SIZE*2)) {
-
-                // check from the end of buffer
-                if( memcmp ( buf + iTotalBytesRead - MSG_SOCK_SIGN_SIZE, MSG_SOCK_SIGN, MSG_SOCK_SIGN_SIZE ) == 0 )
-                    flgComplete = true;        // full message has been recd.
-        }
-
-        // check END thru peek only if msg is known to be un-signed
-        if( flgSignChecked == true && 
-            flgSignedMsg == false ) {
-
-#ifndef __linux__
-                // check if something more is available on pipe
-                flgError = ( ioctlsocket ( vSocket, FIONREAD, ( unsigned long* )&nBytesAvailable ) == SOCKET_ERROR ) ? true : false;
-                if( flgError ) {
-                    SetErrMsg ( true, "Ioctlsocket failed for peek" );
-                    continue;
-                }
-#endif
-                // check if read operation is complete
-                // 1. read bytes were less than chunk size
-                // 2. no more data is available in pipe
-                flgComplete  = ( iCurrBytesRead < iChunkSize || nBytesAvailable == 0 ) ? true : false;
-        }
-    }
-
-
-    // check if there has been error
-    if( flgError ) {
-
-        // release any allocated buffers
-        if( buf ) {
-            delete[] buf;
-            buf = NULL;
-        }
-
-        return false;
-    }
-
-    // read completed successfully so adjust msg if signed
-    if( flgSignedMsg == true ) {
-
-        // remove start signature
-        memmove( buf, buf + MSG_SOCK_SIGN_SIZE, iTotalBytesRead - MSG_SOCK_SIGN_SIZE );
-
-        // reduce the number of bytes read by START & END signatures
-        iTotalBytesRead -= ( MSG_SOCK_SIGN_SIZE*2 );
-
-        // since we have extra bytes bcoz of end signature, why not zero terminate the buffer
-        buf[iTotalBytesRead] = 0;
-    }
-
-    // transfer to caller, both buffer & number of bytes
-    pBuffer     = buf;
-    pMsgSize    = iTotalBytesRead;
-
-    return true;
-}
-
-
-// --------------------------------------------------------------------
 // to close the current socket
 // --------------------------------------------------------------------
 
-void TSocketClient::ShutdownSSL()
-{
+void TSocketClient::ShutdownSSL() {
+
     SSL_shutdown(ssl);
     SSL_free(ssl);
 }
 
-void TSocketClient::SockClose ( void )
-{
+
+void TSocketClient::SockClose ( void ) {
+
     int iStatus;
 
     // check if socket handle is valid
@@ -924,17 +596,5 @@ bool TSocketClient::SetErrMsg ( bool flgIncludeWin32Error, const char* pszErrMsg
 
 
     return false;
-}
-
-
-// --------------------------------------------------------------------
-// to write the signature to socket to indicate start or end of msg
-// --------------------------------------------------------------------
-
-bool TSocketClient::WriteSignature ( void )
-{
-    int    x;
-
-    return SockWriteChunk (MSG_SOCK_SIGN, MSG_SOCK_SIGN_SIZE, x  );
 }
 

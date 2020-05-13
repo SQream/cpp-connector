@@ -57,15 +57,14 @@ sqream::connection_t::~connection_t()
     disconnect();
 }
 
-void sqream::connection_t::connect(const std::string &ipv4,int port,bool ssl)
-{
+void sqream::connection_t::connect(const std::string &ipv4,int port,bool ssl) {
+
     /// <i>connect to a sqreamd session</i><br>
     /// <b>input:</b>
     /// <ul>
     /// <li>const std::string &ipv4:&emsp; ipv4 address of the sqreamd</li>
     /// <li>int port:&emsp; port of the sqreamd</li>
     /// </ul>
-    printf  ("connection_t connect start\n");
 
     if(socket) disconnect();
     socket=new(std::nothrow) TSocketClient(ipv4.c_str(),port,ssl);
@@ -75,12 +74,11 @@ void sqream::connection_t::connect(const std::string &ipv4,int port,bool ssl)
         socket=nullptr;
         THROW_GENERAL_ERROR("unable to create socket");
     }
-    printf  ("connection_t connect end\n");
 
 }
 
-void sqream::connection_t::disconnect()
-{
+void sqream::connection_t::disconnect() {
+
     /// <i>disconnect from a sqreamd session</i><br>
     if(socket)
     {
@@ -90,8 +88,8 @@ void sqream::connection_t::disconnect()
     }
 }
 
-void sqream::connection_t::read(std::vector<char> &data)
-{
+void sqream::connection_t::read(std::vector<char> &data) {
+
     /// <i>read data sent by sqreamd</i><br>
     /// <b>input:</b>
     /// <ul>
@@ -111,8 +109,9 @@ void sqream::connection_t::read(std::vector<char> &data)
     else THROW_GENERAL_ERROR("not connected");
 }
 
-void sqream::connection_t::write(const char *data,const uint64_t data_size,const uint8_t msg_type[HEADER::SIZE])
-{
+
+void sqream::connection_t::write(const char *data,const uint64_t data_size,const uint8_t msg_type[HEADER::SIZE]) {
+
     /// <i>read data sent by sqreamd</i><br>
     /// <b>input:</b>
     /// <ul>
@@ -146,10 +145,11 @@ void sqream::connection_t::write(const char *data,const uint64_t data_size,const
     else THROW_GENERAL_ERROR("not connected");
 }
 
-sqream::connector::connector()
-{
+
+sqream::connector::connector() {
     /// <i>Trivial connector constructor</i><br>
 }
+
 
 sqream::connector::~connector()
 {
@@ -182,7 +182,6 @@ sqream::connector::~connector()
     else if(reply_json.contains("error")) THROW_SQREAM_ERROR(reply_json["error"]);\
     else THROW_GENERAL_ERROR("an unknown error occured");\
 }
-
 
 bool verify_response(json& reply_json, std::string value) {
 
@@ -255,7 +254,6 @@ bool sqream::connector::connect(const std::string &ipv4,int port,bool ssl,const 
     host.connect(ipv4,port,ssl);
 
     json reply_json;
-    printf  ("connector connect start\n");
     rxtx(this, reply_json, MESSAGES::connectDatabase, service.c_str(), username.c_str(), password.c_str(), database.c_str());
     ipv4_=ipv4;
     port_=port;
@@ -265,20 +263,15 @@ bool sqream::connector::connect(const std::string &ipv4,int port,bool ssl,const 
     database_=database;
     service_=service;
     var_encoding_= "ascii";
-    if(reply_json.contains("varcharEncoding"))
-    {
+    if(reply_json.contains("varcharEncoding")) {
         var_encoding_ = reply_json["varcharEncoding"];          // std::string var_encoding_
     }
-    printf  ("connector connect mid parse\n");
 
-    if(reply_json.contains("connectionId"))
-    {
+    if(reply_json.contains("connectionId")) {
         connection_id_ = reply_json["connectionId"];  // uint32_t connection_id_
-        printf  ("has connectionId\n");
         return true;
     }
     else {
-        printf  ("no connectionId\n");
         return false;
     }
 }
@@ -313,7 +306,6 @@ bool sqream::connector::prepare_statement(std::string sqlQuery,int chunk_size) {
     /// <li>int chunk_size:&emsp; this parameter is unparsed</li>
     /// </ul>
     /// <b>return</b>(bool):&emsp; success from server
-    printf ("prepare_statement start\n");
     json reply_json, prepare_json;
     prepare_json["prepareStatement"] = sqlQuery;
     prepare_json["chunkSize"] = chunk_size;
@@ -327,13 +319,10 @@ bool sqream::connector::prepare_statement(std::string sqlQuery,int chunk_size) {
         }
         else THROW_GENERAL_ERROR("could not parse reconnection message");
         rxtx(this, reply_json, MESSAGES::reconstructStatement,statement_id_);
-        puts("prepare_statement reconnect after rxtx ");
-        putj(reply_json)
         // ERR_HANDLE_STR(statementReconstructed)
         return verify_response(reply_json, "statementReconstructed");
     }
-    else{ 
-        printf ("prepare_statement no reconnect\n");
+    else { 
         ERR_HANDLE(statementPrepared,GetBool)
     }
 }
@@ -413,9 +402,7 @@ bool sqream::connector::execute()
     /// <i>Connector routine that tells the server to execute a statement</i><br>
     /// <b>return</b>(bool):&emsp; success response from sqreamd
     json reply_json;
-    puts ("execute start");
     rxtx(this, reply_json,MESSAGES::execute);
-    puts ("execute after rxtx");
 
     // ERR_HANDLE_STR(executed)
     bool res = verify_response(reply_json, "executed");
@@ -482,10 +469,13 @@ void sqream::connector::put(std::vector<char> &binary_data,size_t rows)
     host.write(msg.data(),msg.size(),HEADER::HEADER_JSON);
     host.write(binary_data.data(),binary_data.size(),HEADER::HEADER_BINARY);
     host.read(reply_msg);
-    if(!(reply_json.parse(std::string(reply_msg.begin(),reply_msg.end()).c_str()))) THROW_GENERAL_ERROR("could not parse response");
-    if(reply_json.contains("putted") and !(reply_json["putted"] == "putted")) return;
-    else if(reply_json.contains("error")) THROW_SQREAM_ERROR(reply_json["error"]);
-    else THROW_GENERAL_ERROR("sqream::connector::put: an unknown error occured");
+    reply_json = json::parse(std::string(reply_msg.begin(),reply_msg.end()).c_str());
+    if(reply_json.contains("putted") and (reply_json["putted"] == "putted")) 
+        return;
+    else if(reply_json.contains("error")) 
+        THROW_SQREAM_ERROR(reply_json["error"]);
+    else 
+        THROW_GENERAL_ERROR("sqream::connector::put: an unknown error occured");
 }
 
 bool sqream::connector::close_statement()
@@ -561,9 +551,7 @@ bool sqream::driver::connect(const std::string &ipv4,int port,bool ssl,const std
     if(sqc_) disconnect();
     sqc_=new(std::nothrow) connector;
     if(!sqc_) THROW_GENERAL_ERROR("error creating connection");
-    puts  ("\ndriver connect start");
     bool retval=sqc_->connect(ipv4,port,ssl,username,password,database,service);
-    printf  ("driver connect end\n");
 
     return retval;
 }
@@ -669,14 +657,13 @@ void sqream::driver::put_buff(size_t row_cnt, int buff_idx)
     buffer_.clear();
 }
 
-void sqream::driver::new_query(const std::string &sql_query)
-{
+void sqream::driver::new_query(const std::string &sql_query) {
+
     /// <i>This function creates a new statement and deduces its type and metadata</i><br>
     /// <b>input:</b>
     /// <ul>
     /// <li>const std::string &sql_query:&emsp; SQream SQL Query</li>
     /// </ul>
-    printf ("new_query start\n");
     TC(sqc_)
     state_=0;
     row_count_=0;
@@ -687,10 +674,8 @@ void sqream::driver::new_query(const std::string &sql_query)
     column_sizes_.clear();
     colck_.clear();
     sqc_->open_statement();
-    printf ("new_query before prepare_statement\n");
     if(!sqc_->prepare_statement(sql_query,57/*Grothendieck prime*/)) THROW_GENERAL_ERROR("error preparing statement");
     state_|=1;
-    printf ("new_query end\n");
 
 }
 
@@ -703,10 +688,7 @@ bool sqream::driver::execute_query()
     /// <li>const std::string &sql_query:&emsp; SQream SQL Query</li>
     /// </ul>
     TCCS(sqc_,1)
-    printf ("execute_query before execute()\n");
-    if(sqc_->execute())
-    {
-        printf ("execute_query after execute()\n");
+    if(sqc_->execute()) {
         statement_type_=sqc_->metadata_query(metadata_input_,metadata_output_);
         
         switch(statement_type_)
@@ -724,14 +706,13 @@ bool sqream::driver::execute_query()
         return true;
     }
     else {
-        puts("execute_query execute returned false");
-        throw std::string("failed to execute query");
-        // THROW_GENERAL_ERROR("failed to execute query");
+        // throw std::string("failed to execute query");
+        THROW_GENERAL_ERROR("failed to execute query");
     }
 }
 
-bool sqream::driver::next_query_row(const size_t min_put_size)
-{
+bool sqream::driver::next_query_row(const size_t min_put_size) {
+
     /// <i>This driver retrieves or sends data per row</i><br>
     /// This function can only be executed after a execute_query() call<br>
     /// <b>input:</b>
@@ -796,23 +777,18 @@ bool sqream::driver::next_query_row(const size_t min_put_size)
     }
 }
 
-bool sqream::driver::finish_query()
-{
+bool sqream::driver::finish_query() {
     /// <i>This driver retrieves or sends data per row</i><br>
     /// This function can only be executed after a execute_query() call
-    puts("finish_query start")
     if(state_==3) state_|=4;
     TCCS(sqc_,7)
     if(statement_type_==CONSTS::insert) {
-        ping
         if(buffer_switch_th) {
             //std::printf("Ending previous buff switch\n");
             (*buffer_switch_th).get();
             buffer_switch_th.reset(nullptr);
         }
-        ping
         if(flat_size_()) {
-            ping
             put_buff(row_count_, curr_buff_idx.load());
         }
     }
@@ -1401,8 +1377,8 @@ uint64_t sqream::datetime_t::get()
     return (((uint64_t)date.get())<<32)+3600000*hour+60000*minute+1000*second+millisecond;
 }
 
-void sqream::datetime_t::set(uint64_t datetime)
-{
+void sqream::datetime_t::set(uint64_t datetime) {
+
     date_t date;
     date.set((uint32_t)(datetime>>32));
     year=date.year;
@@ -1416,8 +1392,9 @@ void sqream::datetime_t::set(uint64_t datetime)
     if(!validate()) THROW_GENERAL_ERROR("invalid datetime format was set");
 }
 
-bool sqream::datetime_t::validate()
-{
+
+bool sqream::datetime_t::validate() {
+
     date_t date;
     date.set((uint32_t)(this->get()>>32));
     if(!date.validate()) return false;
@@ -1428,8 +1405,9 @@ bool sqream::datetime_t::validate()
     return true;
 }
 
-uint32_t sqream::date(int32_t year,int32_t month,int32_t day)
-{
+
+uint32_t sqream::date(int32_t year,int32_t month,int32_t day) {
+
     date_t d;
     d.year=year;
     d.month=month;
@@ -1437,8 +1415,9 @@ uint32_t sqream::date(int32_t year,int32_t month,int32_t day)
     return d.get();
 }
 
-uint64_t sqream::datetime(int32_t year,int32_t month,int32_t day,int32_t hour,int32_t minute,int32_t second,int32_t millisecond)
-{
+
+uint64_t sqream::datetime(int32_t year,int32_t month,int32_t day,int32_t hour,int32_t minute,int32_t second,int32_t millisecond) {
+   
     datetime_t dt;
     dt.year=year;
     dt.month=month;
@@ -1450,19 +1429,20 @@ uint64_t sqream::datetime(int32_t year,int32_t month,int32_t day,int32_t hour,in
     return dt.get();
 }
 
-sqream::date_t sqream::make_date(uint32_t date)
-{
+sqream::date_t sqream::make_date(uint32_t date) {
+
     date_t retval;
     retval.set(date);
     return retval;
 }
 
-sqream::datetime_t sqream::make_datetime(uint64_t datetime)
-{
+sqream::datetime_t sqream::make_datetime(uint64_t datetime) {
+
     datetime_t retval;
     retval.set(datetime);
     return retval;
 }
+
 
 void sqream::new_query_execute(driver *drv, std::string sql_query) {
     /// <i>operates the protocol using a connector driver to prepare and execute a query but stops before closing to permit fetching or putting (enables networking insert)</i><br>
@@ -1472,14 +1452,9 @@ void sqream::new_query_execute(driver *drv, std::string sql_query) {
     /// <li>driver &col:&emsp; column index</li>
     /// </ul>
     TC(drv->sqc_)
-    try
-    {
-        printf ("\n-- new_query_execute before new_query\n");
+    try{
         drv->new_query(sql_query);
-        printf ("\n-- new_query_execute after new_query\n");
         drv->execute_query();
-        printf ("\n-- new_query_execute after execute\n");
-
     }
     catch(std::string &err)
     {
@@ -1487,19 +1462,16 @@ void sqream::new_query_execute(driver *drv, std::string sql_query) {
         drv->sqc_->close_statement();
         THROW_GENERAL_ERROR(err.c_str());
     }
-    puts("new_query_execute end");
 }
 
 
-void sqream::run_direct_query(driver *drv,std::string sql_query)
-{
+void sqream::run_direct_query(driver *drv,std::string sql_query) {
+    
     if(not drv) 
         THROW_GENERAL_ERROR("sqream driver is not initialized");
-        printf ("we twaa so haaaad\n");
 
     try {
         new_query_execute(drv,sql_query);
-        printf ("we twaa direct query\n");
         drv->finish_query();
     }
     catch(std::string &err) {
@@ -1507,8 +1479,8 @@ void sqream::run_direct_query(driver *drv,std::string sql_query)
     }
 }
 
-std::vector<sqream::column> sqream::get_metadata(driver *drv)
-{
+
+std::vector<sqream::column> sqream::get_metadata(driver *drv) {
 
     if(!drv->sqc_) THROW_GENERAL_ERROR("sqream driver is not connected");
     if(drv->state_<1) THROW_GENERAL_ERROR("no metadata has been retrieved at this stage");
@@ -1522,15 +1494,17 @@ std::vector<sqream::column> sqream::get_metadata(driver *drv)
     return retval;
 }
 
-uint32_t sqream::retrieve_statement_id(driver *drv)
-{
+
+uint32_t sqream::retrieve_statement_id(driver *drv) {
+
     if(!drv->sqc_) THROW_GENERAL_ERROR("sqream driver is not connected");
     if(drv->state_<1) THROW_GENERAL_ERROR("no statement id has been retrieved at this stage");
     return drv->sqc_->statement_id_;
 }
 
-sqream::CONSTS::statement_type sqream::retrieve_statement_type(driver *drv)
-{
+
+sqream::CONSTS::statement_type sqream::retrieve_statement_type(driver *drv) {
+
     if(!drv->sqc_) THROW_GENERAL_ERROR("sqream driver is not connected");
     if(drv->state_<3) THROW_GENERAL_ERROR("no statement type has been retrieved at this stage");
     return drv->statement_type_;

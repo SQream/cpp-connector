@@ -302,7 +302,6 @@ bool simple() {
     int val = rand();
     sqc.set_int(0, val);
     sqc.next_query_row();
-    ping
     sqc.finish_query();
     ping
     puts("```    simple test after create");

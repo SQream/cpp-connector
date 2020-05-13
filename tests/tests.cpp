@@ -23,7 +23,7 @@
 #define ERR_COLUMN_INDEX_OUT_OF_RANGE   "Column index is out of range"
 #define ERR_INVALID_COLUMN_NAME         "Invalid column name"
 #define ERR_WRONG_STATEMENT_TYPE        "Wrong statement type"
-#define ERR_SQMC                        "SQream-cpp-connector.cc:"
+#define ERR_SQMC                        "connector.cpp:"
 
 using namespace std;
 namespace con = sqream;
@@ -245,7 +245,7 @@ bool setup_tests (string ip = "127.0.0.1", int port = 5001, bool ssl = true){
 
     auto argc = 5;
     unsigned int seed = time(nullptr);
-    printf("seed is %ud\n", seed);
+    // printf("seed is %ud\n", seed);
     srand(seed);
     
     sqc.connect(ip, port, ssl, "sqream", "sqream", "master");
@@ -1017,7 +1017,8 @@ SUBCASE("retrieve_stmt_type") {
     std::unique_ptr<sqream::driver> temp(new sqream::driver());
     REQUIRE_THROWS_AS(retrieve_statement_type(temp.get()), std::string);
     temp->connect(sqc.sqc_->ipv4_,sqc.sqc_->port_, sqc.sqc_->ssl_, sqc.sqc_->username_, sqc.sqc_->password_, sqc.sqc_->database_, sqc.sqc_->service_);
-    CHECK(retrieve_statement_type(temp.get()) == con::CONSTS::unset);
+    // CHECK(retrieve_statement_type(temp.get()) == con::CONSTS::unset);
+    REQUIRE_THROWS_AS(retrieve_statement_type(temp.get()), std::string);
 
     run_direct_query(temp.get(), "create or replace table retrieve_types(x int not null)");
     CHECK(retrieve_statement_type(temp.get()) == con::CONSTS::direct);
