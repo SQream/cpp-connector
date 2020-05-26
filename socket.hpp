@@ -14,7 +14,6 @@
 
 #ifndef __linux__
     #pragma comment(lib, "Ws2_32.lib")
-    // #include <windows.h>
     typedef int64_t sock_buf_size;
     typedef int64_t ssize_t;
 #else
@@ -116,14 +115,14 @@ TSocketClient::TSocketClient (const char* pServer, int pPort, bool is_ssl_) : is
     vSocket = INVALID_SOCKET;                          // handle
     memset (&vSockAddr, 0, sizeof(vSockAddr));         // address struct
     memset (vszErrMsg, 0, sizeof(vszErrMsg));          // internal error message store
-
+    auto error = false;
     // Initialize 
     int addr;
     PHOSTENT phostent = NULL;
 
     // precaution
     if ( pServer == NULL or pPort <= 0 )
-        return false;
+        error = true;
 
     // try converting from dotted decimal form
     addr = inet_addr (pServer);
@@ -140,7 +139,7 @@ TSocketClient::TSocketClient (const char* pServer, int pPort, bool is_ssl_) : is
             vSockAddr.sin_addr.s_addr = addr;
         }
         else
-            return false;
+            error = true;
     }
 
     // try name resolution
@@ -148,7 +147,7 @@ TSocketClient::TSocketClient (const char* pServer, int pPort, bool is_ssl_) : is
         // use gethosbyname function and try resolving
         phostent = gethostbyname(pServer);
         if ( phostent  == NULL )
-            return false;                                         // resolution failed
+            error  = true;                                         // resolution failed
 
         // put the addr in SOCKADDR struct
         memcpy (&(vSockAddr.sin_addr), phostent->h_addr, phostent->h_length);
@@ -167,7 +166,6 @@ TSocketClient::TSocketClient (const char* pServer, int pPort, bool is_ssl_) : is
         OpenSSL_add_all_algorithms();        
     }
 
-    return true;
 }
 
 
@@ -180,6 +178,7 @@ TSocketClient::~TSocketClient  () {
 // --------------------------------------------------------------------
 // STATIC, to initialize the windows socket library ( requirement for winsock )
 // --------------------------------------------------------------------
+#ifndef __linux__  // SockInitLib, SockFinalizeLib - Winsock init / end
 
 int TSocketClient::SockInitLib (short pMajorVersion, short pMinorVersion) {
 
@@ -231,6 +230,7 @@ bool TSocketClient::SockFinalizeLib ( void )
     return true;
 }
 
+#endif  // SockInitLib, SockFinalizeLib
 
 bool TSocketClient::SockCreateAndConnect ( void ) {
 

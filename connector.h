@@ -73,20 +73,8 @@ namespace sqream
 #undef JSA
         template<typename ...Args> void format(std::vector<char> &output,const char input[],Args...args);   ///< <h3>Unformatted message formatter (snprintf-wrapper)</h3>
     }
-    /// <h3>connection managing socket wrapping structure</h3>
-    struct connection_t
-    {
-        TSocketClient *socket;                                                                          ///< <h3>Actual socket</h3>
-        connection_t();                                                                                 ///< <h3>Trivial constructor</h3>
-        ~connection_t();                                                                                ///< <h3>Auto disconnectiong destructor</h3>
-        void connect(const std::string &ipv4,int port,bool ssl);                                        ///< <h3>Manually bring up a connection</h3>
-        void disconnect();                                                                              ///< <h3>Manually bring down a connection</h3>
-        void read(std::vector<char> &data);                                                             ///< <h3>Read input from the connection line</h3>
-        void write(const char *data,const uint64_t data_size,const uint8_t msg_type[HEADER::SIZE]);     ///< <h3>Write input from the connection line</h3>
-    };
-    /// <h3>SQream column metadata</h3>
-    struct column
-    {
+
+    struct column {
         std::string name;                                                                               ///< <h3>Column name</h3>
         bool nullable;                                                                                  ///< <h3>Nullability of a column</h3>
         bool is_true_varchar;                                                                           ///< <h3>Is the column a true varchar</h3>
@@ -94,10 +82,10 @@ namespace sqream
         unsigned size;                                                                                  ///< <h3>Size in bytes of sqream datatype</h3>
         unsigned scale;                                                                                 ///< <h3>Scale of chunk</h3>
     };
+
     /// <h3>Low level connector</h3>
-    struct connector
-    {
-        connection_t host;                                                                                                          ///< <h3>Connection object</h3>
+    struct connector {
+        TSocketClient *socket;  
         std::string ipv4_;                                                                                                          ///< <h3>Newest ip4v address</h3> (internal)
         int port_;                                                                                                                  ///< <h3>Newest port</h3> (internal)
         bool ssl_;
@@ -109,7 +97,10 @@ namespace sqream
         uint32_t connection_id_;                                                                                                    ///< <h3>Newest connection id</h3> (internal)
         uint32_t statement_id_;                                                                                                     ///< <h3>Newest statement id</h3> (internal)
         connector();                                                                                                                ///< <h3>Trivial constructor</h3>
-        ~connector();                                                                                                               ///< <h3>Auto disconnection message destructor</h3>
+        ~connector();     
+        void connect_socket(const std::string &ipv4,int port,bool ssl);
+        void read  (std::vector<char> &data);
+        void write (const char *data,const uint64_t data_size,const uint8_t msg_type[HEADER::SIZE]);
         bool connect(const std::string &ipv4,int port,bool ssl,const std::string &username,const std::string &password,const std::string &database,const std::string &service); ///< <h3>Manual connection message</h3>
         bool reconnect(const std::string &ipv4,int port,int listener_id);                                                            ///< <h3>(Load Balancer) Reconnect to a sqreamd instance</h3>
         bool open_statement();                                                                                                      ///< <h3>Open a new statement message</h3>
@@ -122,9 +113,9 @@ namespace sqream
 #undef ERR_HANDLE
 #undef ERR_HANDLE_STR
     };
+    
     /// <h3>SQream high level connector (driver)</h3>
-    struct driver
-    {
+    struct driver {
         std::unique_ptr<std::future<void>> buffer_switch_th;
         std::mutex buff_switch_mut;
         std::atomic<int> curr_buff_idx;
@@ -207,9 +198,9 @@ namespace sqream
         void set_varchar(const std::string &col_name,const std::string &value);                                                     ///< <h3>Set varchar value of insertion row by column name</h3> (unsupported)
         void set_nvarchar(const std::string &col_name,const std::string &value);                                                    ///< <h3>Set nvarchar value of insertion row by column name</h3> (unsupported)
     };
+
     ///< <h3>SQream date conversion structure</h3>
-    struct date_t
-    {
+    struct date_t {
         int32_t year;                                                                                                               ///< <h3>Year value</h3>
         int32_t month;                                                                                                              ///< <h3>Month value</h3>
         int32_t day;                                                                                                                ///< <h3>Day value</h3>
@@ -217,9 +208,9 @@ namespace sqream
         void set(uint32_t date);                                                                                                    ///< <h3>Set date in SQream format</h3>
         bool validate();                                                                                                            ///< <h3>Validate the current date</h3>
     };
+
     ///< <h3>SQream datetime conversion structure</h3>
-    struct datetime_t
-    {
+    struct datetime_t {
         int32_t year;                                                                                                               ///< <h3>Year value</h3>
         int32_t month;                                                                                                              ///< <h3>Month value</h3>
         int32_t day;                                                                                                                ///< <h3>Day value</h3>
