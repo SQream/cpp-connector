@@ -6,15 +6,12 @@
 #include "socket.hpp"
 #include "json.hpp"
 #include <exception>
-/*
-#include <kissnet.hpp>
-namespace sock = kissnet;
-//*/
 
 /// Macro to format and throw errors
 #define THROW_GENERAL_ERROR(MSG) throw std::string(__FILE__":")+std::to_string(__LINE__)+std::string(" in ")+std::string(__func__)+std::string("(): ")+std::string(MSG)
 #define THROW_SQREAM_ERROR(MSG) throw std::string(__FILE__":")+std::to_string(__LINE__)+std::string(" in ")+std::string(__func__)+std::string("() returned error from SQream: ")+std::string(MSG)
 
+// Easy prints for debugging
 #define ping puts("ping");
 #define puts(str) puts(str);
 #define putss(str) puts(str.c_str());
@@ -22,15 +19,14 @@ namespace sock = kissnet;
 
 ///Linux-Windows snprintf variant
 #ifdef __linux__
-#define SNPRINTF snprintf
+    #define SNPRINTF snprintf
 #else
-#define SNPRINTF _snprintf
+    #define SNPRINTF _snprintf
 #endif
 
 using json = nlohmann::json;
 
-template<typename ...Args> void sqream::MESSAGES::format(std::vector<char> &output,const char input[],Args...args)
-{
+template<typename ...Args> void sqream::MESSAGES::format(std::vector<char> &output,const char input[],Args...args) {
     /// <i>sqream connector JSON message formatter</i><br>
     /// <b>input:</b>
     /// <ul>
@@ -45,127 +41,6 @@ template<typename ...Args> void sqream::MESSAGES::format(std::vector<char> &outp
     output.pop_back();
 }
 
-sqream::connection_t::connection_t()
-{
-    /// <i>ensure the socket is null pointer on object creation</i><br>
-    socket=nullptr;
-}
-
-sqream::connection_t::~connection_t()
-{
-    /// <i>ensure a disconnect on object destruction</i><br>
-    disconnect();
-}
-
-void sqream::connection_t::connect(const std::string &ipv4,int port,bool ssl) {
-
-    /// <i>connect to a sqreamd session</i><br>
-    /// <b>input:</b>
-    /// <ul>
-    /// <li>const std::string &ipv4:&emsp; ipv4 address of the sqreamd</li>
-    /// <li>int port:&emsp; port of the sqreamd</li>
-    /// </ul>
-
-    if(socket) disconnect();
-    socket=new(std::nothrow) TSocketClient(ipv4.c_str(),port,ssl);
-
-    if(socket->SockCreateAndConnect()==false)
-    {
-        socket=nullptr;
-        THROW_GENERAL_ERROR("unable to create socket");
-    }
-
-}
-
-void sqream::connection_t::disconnect() {
-
-    /// <i>disconnect from a sqreamd session</i><br>
-    if(socket)
-    {
-        socket->SockClose();
-        delete socket;
-        socket=nullptr;
-    }
-}
-
-void sqream::connection_t::read(std::vector<char> &data) {
-
-    /// <i>read data sent by sqreamd</i><br>
-    /// <b>input:</b>
-    /// <ul>
-    /// <li>std::vector<char> &data:&emsp; output buffer (automatically resized)</li>
-    /// </ul>
-    if(socket)
-    {
-        char header[10];
-        uint64_t data_size;
-        int bytes_read;
-        if(!socket->SockReadChunk(header,bytes_read,sizeof(header))) THROW_GENERAL_ERROR("socket failed to read header");
-        if(header[0]!=HEADER::PROTOCOL_VERSION) THROW_GENERAL_ERROR("protocol version mismatch");
-        memcpy(&data_size,&header[2],sizeof(uint64_t));
-        data.resize(data_size);
-        if(!socket->SockReadChunk((char*)data.data(),bytes_read,data_size)) THROW_GENERAL_ERROR("socket failed to read content");
-    }
-    else THROW_GENERAL_ERROR("not connected");
-}
-
-
-void sqream::connection_t::write(const char *data,const uint64_t data_size,const uint8_t msg_type[HEADER::SIZE]) {
-
-    /// <i>read data sent by sqreamd</i><br>
-    /// <b>input:</b>
-    /// <ul>
-    /// <li>const char *data:&emsp; pointer to data to be written</li>
-    /// <li>const size_t data_size:&emsp; size of data to be written</li>
-    /// <li>const uint8_t msg_type[HEADER::SIZE]: message type indicator</li>
-    /// </ul>
-    if(socket)
-    {
-        if(data_size<CONSTS::MAX_SIZE)
-        {
-            int bytes_written;
-            if(!memcmp((const char*)msg_type,HEADER::HEADER_JSON,HEADER::SIZE))
-            {
-                const size_t block_size=HEADER::SIZE+sizeof(data_size);
-                std::vector<char> pillow(block_size+data_size);
-                memcpy(pillow.data(),msg_type,HEADER::SIZE);
-                memcpy(&pillow[HEADER::SIZE],&data_size,sizeof(data_size));
-                memcpy(&pillow[block_size],data,data_size);
-                if(!socket->SockWriteChunk(pillow.data(),data_size+block_size,bytes_written)) THROW_GENERAL_ERROR("socket failed to write message block");
-            }
-            else
-            {
-                if(!socket->SockWriteChunk(msg_type,HEADER::SIZE,bytes_written)) THROW_GENERAL_ERROR("socket failed to write header");
-                if(!socket->SockWriteChunk(&data_size,sizeof(data_size),bytes_written)) THROW_GENERAL_ERROR("socket failed to write binary data size");
-                if(!socket->SockWriteChunk(data,data_size,bytes_written)) THROW_GENERAL_ERROR("socket failed to write binary data");
-            }
-        }
-        else THROW_GENERAL_ERROR("binary data overflow");
-    }
-    else THROW_GENERAL_ERROR("not connected");
-}
-
-
-sqream::connector::connector() {
-    /// <i>Trivial connector constructor</i><br>
-}
-
-
-sqream::connector::~connector()
-{
-    /// <i>Connector destructor that automatically disconnects</i><br>
-    if(host.socket)
-    {
-        int bytes_written;
-        const size_t data_size=strlen(MESSAGES::closeConnection);
-        const size_t block_size=HEADER::SIZE+sizeof(data_size);
-        std::vector<char> pillow(block_size+data_size);
-        memcpy(pillow.data(),HEADER::HEADER_JSON,HEADER::SIZE);
-        memcpy(&pillow[HEADER::SIZE],&data_size,sizeof(data_size));
-        memcpy(&pillow[block_size],MESSAGES::closeConnection,data_size);
-        host.socket->SockWriteChunk(pillow.data(),data_size+block_size,bytes_written);
-    }
-}
 
 /// <i>ERR_HANDLE macro removes redundant code to check the validity of a server response</i><br>
 #define ERR_HANDLE(VALUE,JSON_TYPE)\
@@ -210,8 +85,8 @@ static void rxtx(sqream::connector *conn, json& reply_json,const char input[]) /
 
     std::vector<char> reply_msg;
     
-    conn->host.write(input,strlen(input),sqream::HEADER::HEADER_JSON);
-    conn->host.read(reply_msg);
+    conn->write(input,strlen(input),sqream::HEADER::HEADER_JSON);
+    conn->read(reply_msg);
     
     // add catch error - https://github.com/nlohmann/json/blob/develop/doc/examples/parse_error.cpp
     reply_json = json::parse(std::string(reply_msg.begin(),reply_msg.end()).c_str()); // THROW_GENERAL_ERROR("could not parse server response");
@@ -230,16 +105,126 @@ void rxtx(sqream::connector *conn, json& reply_json,const char input[],Args...ar
     /// </ul>
     std::vector<char> reply_msg,msg;
     sqream::MESSAGES::format(msg,input,args...);
-    conn->host.write(msg.data(),msg.size(),sqream::HEADER::HEADER_JSON);
-    conn->host.read(reply_msg);
+    conn->write(msg.data(),msg.size(),sqream::HEADER::HEADER_JSON);
+    conn->read(reply_msg);
     
     // add catch error - https://github.com/nlohmann/json/blob/develop/doc/examples/parse_error.cpp
     reply_json = json::parse(std::string(reply_msg.begin(),reply_msg.end()).c_str()); //THROW_GENERAL_ERROR("could not parse server response");
 
 }
 
-bool sqream::connector::connect(const std::string &ipv4,int port,bool ssl,const std::string &username,const std::string &password,const std::string &database,const std::string &service)
-{
+
+//         --- Connector object ----
+//         -------------------------
+
+sqream::connector::connector() {
+    /// <i>Trivial connector constructor</i><br>
+
+    /// <i>ensure the socket is null pointer on object creation</i><br>
+    socket=nullptr;
+}
+
+sqream::connector::~connector() {
+   
+    /// <i>Connector destructor that automatically disconnects</i><br>
+    if(socket) {
+
+        int bytes_written;
+        const size_t data_size=strlen(MESSAGES::closeConnection);
+        const size_t block_size=HEADER::SIZE+sizeof(data_size);
+        std::vector<char> pillow(block_size+data_size);
+        memcpy(pillow.data(),HEADER::HEADER_JSON,HEADER::SIZE);
+        memcpy(&pillow[HEADER::SIZE],&data_size,sizeof(data_size));
+        memcpy(&pillow[block_size],MESSAGES::closeConnection,data_size);
+        socket->SockWriteChunk(pillow.data(),data_size+block_size,bytes_written);
+    
+        /// <i>ensure a disconnect on object destruction</i><br>
+        /// <i>disconnect from a sqreamd session</i><br>
+        socket->SockClose();
+        delete socket;
+        socket=nullptr;
+    }
+}
+
+
+void sqream::connector::connect_socket(const std::string &ipv4,int port,bool ssl) {
+
+    /// <i>connect to a sqreamd session</i><br>
+    /// <b>input:</b>
+    /// <ul>
+    /// <li>const std::string &ipv4:&emsp; ipv4 address of the sqreamd</li>
+    /// <li>int port:&emsp; port of the sqreamd</li>
+    /// </ul>
+
+    if(socket) {
+        socket->SockClose();
+        delete socket;
+        socket=nullptr;
+    }
+    socket=new(std::nothrow) TSocketClient(ipv4.c_str(),port,ssl);
+
+    if(socket->SockCreateAndConnect()==false) {
+        socket=nullptr;
+        THROW_GENERAL_ERROR("unable to create socket");
+    }
+}
+
+
+void sqream::connector::read(std::vector<char> &data) {
+
+    /// <i>read data sent by sqreamd</i><br>
+    /// <b>input:</b>
+    /// <ul>
+    /// <li>std::vector<char> &data:&emsp; output buffer (automatically resized)</li>
+    /// </ul>
+    if(socket) {
+        char header[10];
+        uint64_t data_size;
+        int bytes_read;
+        if(!socket->SockReadChunk(header,bytes_read,sizeof(header))) THROW_GENERAL_ERROR("socket failed to read header");
+        if(header[0]!=HEADER::PROTOCOL_VERSION) THROW_GENERAL_ERROR("protocol version mismatch");
+        memcpy(&data_size,&header[2],sizeof(uint64_t));
+        data.resize(data_size);
+        if(!socket->SockReadChunk((char*)data.data(),bytes_read,data_size)) THROW_GENERAL_ERROR("socket failed to read content");
+    }
+    else 
+        THROW_GENERAL_ERROR("not connected");
+}
+
+
+void sqream::connector::write(const char *data,const uint64_t data_size,const uint8_t msg_type[HEADER::SIZE]) {
+
+    /// <i>read data sent by sqreamd</i><br>
+    /// <b>input:</b>
+    /// <ul>
+    /// <li>const char *data:&emsp; pointer to data to be written</li>
+    /// <li>const size_t data_size:&emsp; size of data to be written</li>
+    /// <li>const uint8_t msg_type[HEADER::SIZE]: message type indicator</li>
+    /// </ul>
+    if(socket) {
+        if(data_size<CONSTS::MAX_SIZE) {
+            int bytes_written;
+            if(!memcmp((const char*)msg_type,HEADER::HEADER_JSON,HEADER::SIZE)) {
+                const size_t block_size=HEADER::SIZE+sizeof(data_size);
+                std::vector<char> pillow(block_size+data_size);
+                memcpy(pillow.data(),msg_type,HEADER::SIZE);
+                memcpy(&pillow[HEADER::SIZE],&data_size,sizeof(data_size));
+                memcpy(&pillow[block_size],data,data_size);
+                if(!socket->SockWriteChunk(pillow.data(),data_size+block_size,bytes_written)) THROW_GENERAL_ERROR("socket failed to write message block");
+            }
+            else {
+                if(!socket->SockWriteChunk(msg_type,HEADER::SIZE,bytes_written)) THROW_GENERAL_ERROR("socket failed to write header");
+                if(!socket->SockWriteChunk(&data_size,sizeof(data_size),bytes_written)) THROW_GENERAL_ERROR("socket failed to write binary data size");
+                if(!socket->SockWriteChunk(data,data_size,bytes_written)) THROW_GENERAL_ERROR("socket failed to write binary data");
+            }
+        }
+        else THROW_GENERAL_ERROR("binary data overflow");
+    }
+    else THROW_GENERAL_ERROR("not connected");
+}
+
+
+bool sqream::connector::connect(const std::string &ipv4,int port,bool ssl,const std::string &username,const std::string &password,const std::string &database,const std::string &service) {
     /// <i>Connector routine that connects to a given ipv4, port, database on sqreamd</i><br>
     /// <b>input:</b>
     /// <ul>
@@ -251,7 +236,7 @@ bool sqream::connector::connect(const std::string &ipv4,int port,bool ssl,const 
     /// <li>const std::string &database:&emsp; database name</li>
     /// </ul>
     /// <b>return</b>(uint32_t):&emsp; connection_id
-    host.connect(ipv4,port,ssl);
+    connect_socket(ipv4,port,ssl);
 
     json reply_json;
     rxtx(this, reply_json, MESSAGES::connectDatabase, service.c_str(), username.c_str(), password.c_str(), database.c_str());
@@ -263,39 +248,38 @@ bool sqream::connector::connect(const std::string &ipv4,int port,bool ssl,const 
     database_=database;
     service_=service;
     var_encoding_= "ascii";
-    if(reply_json.contains("varcharEncoding")) {
+    if(reply_json.contains("varcharEncoding")) 
         var_encoding_ = reply_json["varcharEncoding"];          // std::string var_encoding_
-    }
 
     if(reply_json.contains("connectionId")) {
         connection_id_ = reply_json["connectionId"];  // uint32_t connection_id_
         return true;
     }
-    else {
+    else 
         return false;
-    }
 }
 
-bool sqream::connector::reconnect(const std::string &ipv4,int port,int listener_id)
-{
-    host.connect(ipv4,port,ssl_);
+bool sqream::connector::reconnect(const std::string &ipv4,int port,int listener_id) {
+
+    connect_socket(ipv4,port,ssl_);
     json reply_json;
     rxtx(this, reply_json,MESSAGES::reconnectDatabase,database_.c_str(),service_.c_str(),connection_id_,username_.c_str(),password_.c_str(),listener_id);
+    
     return reply_json.contains("databaseConnected");
 }
 
-bool sqream::connector::open_statement()
-{
+
+bool sqream::connector::open_statement() {
     /// <i>Connector routine that opens a new statement on sqreamd</i><br>
     /// <b>return</b>(uint32_t):&emsp; statement_id
     json reply_json;
     rxtx(this, reply_json,MESSAGES::getStatementId);
-    if(reply_json.contains("statementId"))
-    {
+    if(reply_json.contains("statementId")) {
         statement_id_=reply_json["statementId"];
         return true;
     }
-    else return false;
+    else 
+        return false;
 }
 
 bool sqream::connector::prepare_statement(std::string sqlQuery,int chunk_size) {
@@ -442,7 +426,7 @@ size_t sqream::connector::fetch(std::vector<char> &binary_data,std::vector<uint6
                 if(binary_size>0)
                 {       
                     std::vector<char> temp(binary_size);
-                    host.read(temp);
+                    read(temp);
                     binary_data.insert(binary_data.end(),temp.begin(),temp.end());
                 }
                 else break;
@@ -466,9 +450,9 @@ void sqream::connector::put(std::vector<char> &binary_data,size_t rows)
     std::vector<char> msg,reply_msg;
     json reply_json;
     MESSAGES::format(msg,MESSAGES::put,rows);
-    host.write(msg.data(),msg.size(),HEADER::HEADER_JSON);
-    host.write(binary_data.data(),binary_data.size(),HEADER::HEADER_BINARY);
-    host.read(reply_msg);
+    write(msg.data(),msg.size(),HEADER::HEADER_JSON);
+    write(binary_data.data(),binary_data.size(),HEADER::HEADER_BINARY);
+    read(reply_msg);
     reply_json = json::parse(std::string(reply_msg.begin(),reply_msg.end()).c_str());
     if(reply_json.contains("putted") and (reply_json["putted"] == "putted")) 
         return;
@@ -491,29 +475,33 @@ bool sqream::connector::close_statement()
 #undef ERR_HANDLE
 #undef ERR_HANDLE_STR
 
-sqream::driver::driver()
-{
+
+//   ----  Driver object
+//   -------------------
+
+sqream::driver::driver() {
+
     /// <i>Trivial connector constructor</i><br>
     statement_type_=CONSTS::unset;
     sqc_=nullptr;
     buffer_switch_th.reset(nullptr);
     buffer_.reserve(CONSTS::MIN_PUT_SIZE);
+//*
 #ifndef __linux__
-    sqc_->host.socket->SockInitLib();
+    sqc_->socket->SockInitLib();
 #endif
+//*/
 }
 
 sqream::driver::~driver()
 {
     /// <i>Destructor that closes a statement if available and disconnects from sqreamd</i><br>
-    if(buffer_switch_th)
-    {
+    if(buffer_switch_th) {
         //std::printf("Ending previous buff switch\n");
         (*buffer_switch_th).get();
         buffer_switch_th.reset(nullptr);
     }
-    if(state_>0 and state_<7 and sqc_->host.socket)
-    {
+    if(state_>0 and state_<7 and sqc_->socket) {
         int bytes_read_write;
         const size_t data_size=strlen(MESSAGES::closeStatement);
         const size_t block_size=HEADER::SIZE+sizeof(data_size);
@@ -521,22 +509,21 @@ sqream::driver::~driver()
         memcpy(pillow.data(),HEADER::HEADER_JSON,HEADER::SIZE);
         memcpy(&pillow[HEADER::SIZE],&data_size,sizeof(data_size));
         memcpy(&pillow[block_size],MESSAGES::closeStatement,data_size);
-        sqc_->host.socket->SockWriteChunk(pillow.data(),data_size+block_size,bytes_read_write);
+        sqc_->socket->SockWriteChunk(pillow.data(),data_size+block_size,bytes_read_write);
         char header[10];
         uint64_t data_size_out;
-        sqc_->host.socket->SockReadChunk(header,bytes_read_write,sizeof(header));
+        sqc_->socket->SockReadChunk(header,bytes_read_write,sizeof(header));
         memcpy(&data_size_out,&header[2],sizeof(uint64_t));
         std::vector<char> data(data_size);
-        sqc_->host.socket->SockReadChunk((char*)data.data(),bytes_read_write,data_size);
+        sqc_->socket->SockReadChunk((char*)data.data(),bytes_read_write,data_size);
     }
     disconnect();
 #ifndef __linux__
-    sqc_->host.socket->SockFinalizeLib();
+    sqc_->socket->SockFinalizeLib();
 #endif
 }
 
-bool sqream::driver::connect(const std::string &ipv4,int port,bool ssl,const std::string &username,const std::string &password,const std::string &database,const std::string &service)
-{
+bool sqream::driver::connect(const std::string &ipv4,int port,bool ssl,const std::string &username,const std::string &password,const std::string &database,const std::string &service) {
     /// <i>Connector routine that connects to a given ipv4, port, database on sqreamd</i><br>
     /// <b>input:</b>
     /// <ul>
@@ -548,19 +535,18 @@ bool sqream::driver::connect(const std::string &ipv4,int port,bool ssl,const std
     /// <li>const std::string &database:&emsp; database name</li>
     /// </ul>
     /// <b>return</b>(bool):&emsp; successful
-    if(sqc_) disconnect();
+    if(sqc_) 
+        disconnect();
     sqc_=new(std::nothrow) connector;
-    if(!sqc_) THROW_GENERAL_ERROR("error creating connection");
-    bool retval=sqc_->connect(ipv4,port,ssl,username,password,database,service);
+    if(!sqc_) 
+        THROW_GENERAL_ERROR("error creating connection");
 
-    return retval;
+    return sqc_->connect(ipv4,port,ssl,username,password,database,service);
 }
 
-void sqream::driver::disconnect()
-{
+void sqream::driver::disconnect() {
     /// <i>Disconnect from sqreamd</i><br>
-    if(sqc_)
-    {
+    if(sqc_) {
         delete sqc_;
         sqc_=nullptr;
     }
@@ -581,8 +567,7 @@ void sqream::driver::disconnect()
 /// Combinator of TC, CS and CI macros
 #define TCCSCI(X,Y,Z) TC(X) CS(Y) CI(Z)
 
-size_t sqream::driver::flat_size_()
-{
+size_t sqream::driver::flat_size_() {
     /// <i>Size of the flat buffer when a unflat pbuffer is converted to it</i><br>
     /// <b>return</b>(size_t):&emsp; size of flat buffer
     size_t retval=0;
@@ -590,8 +575,7 @@ size_t sqream::driver::flat_size_()
     return retval;
 }
 
-void sqream::driver::init_pbuffer_(const std::vector<column> &metadata)
-{
+void sqream::driver::init_pbuffer_(const std::vector<column> &metadata) {
     /// <i>Initialize the unflat pbuffer based on a metadata vector</i><br>
     /// <b>input:</b>
     /// <ul>
@@ -613,14 +597,12 @@ void sqream::driver::init_pbuffer_(const std::vector<column> &metadata)
     }
 }
 
-void sqream::driver::flatten_(std::vector<std::vector<std::vector<char>>> &buff_to_flatten)
-{
+void sqream::driver::flatten_(std::vector<std::vector<std::vector<char>>> &buff_to_flatten) {
     /// <i>Append unflat pbuffer to flat buffer</i><br>
     for(std::vector<std::vector<char>> &cols:buff_to_flatten) for(std::vector<char> &col:cols) buffer_.insert(buffer_.end(),col.begin(),col.end());
 }
 
-void sqream::driver::unflatten_()
-{
+void sqream::driver::unflatten_() {
     /// <i>Append flat buffer to unflat pbuffer</i><br>
     size_t pos=0,k=0;
     const size_t I=pbuffer_[curr_buff_idx].size();
@@ -637,8 +619,7 @@ void sqream::driver::unflatten_()
     }
 }
 
-void sqream::driver::reset_pbuffer_(const std::vector<column> &metadata)
-{
+void sqream::driver::reset_pbuffer_(const std::vector<column> &metadata) {
     for(auto &cols:(pbuffer_[curr_buff_idx])) for(auto &col:cols) col.clear();
 
     const size_t I=metadata.size();
@@ -647,8 +628,7 @@ void sqream::driver::reset_pbuffer_(const std::vector<column> &metadata)
     for(size_t i=0;i<I;i++) blob_shift_[curr_buff_idx][i].fill(0);
 }
 
-void sqream::driver::put_buff(size_t row_cnt, int buff_idx)
-{
+void sqream::driver::put_buff(size_t row_cnt, int buff_idx) {
     std::unique_lock<std::mutex> lock(buff_switch_mut);
     //std::printf("Will switch from buffer '%d'\n", buff_idx);
     flatten_(pbuffer_[buff_idx]);
@@ -679,8 +659,7 @@ void sqream::driver::new_query(const std::string &sql_query) {
 
 }
 
-bool sqream::driver::execute_query()
-{
+bool sqream::driver::execute_query() {
     /// <i>This function tells the sqreamd server to start executing the newly generated query</i><br>
     /// This function can only be executed after a valid new_query() call<br>
     /// <b>input:</b>
@@ -691,10 +670,8 @@ bool sqream::driver::execute_query()
     if(sqc_->execute()) {
         statement_type_=sqc_->metadata_query(metadata_input_,metadata_output_);
         
-        switch(statement_type_)
-        {
-            case CONSTS::insert:
-            {
+        switch(statement_type_) {
+            case CONSTS::insert: {
                 init_pbuffer_(metadata_input_);
                 colck_.resize(metadata_input_.size(),0);
             }
@@ -705,11 +682,10 @@ bool sqream::driver::execute_query()
         state_|=2;
         return true;
     }
-    else {
-        // throw std::string("failed to execute query");
+    else 
         THROW_GENERAL_ERROR("failed to execute query");
-    }
 }
+
 
 bool sqream::driver::next_query_row(const size_t min_put_size) {
 
@@ -720,8 +696,7 @@ bool sqream::driver::next_query_row(const size_t min_put_size) {
     /// <li>const size_t &min_put_size:&emsp; minimal size of the binary data black to be sent</li>
     /// </ul>
     TCCS(sqc_,3)
-    switch(statement_type_)
-    {
+    switch(statement_type_) {
         case CONSTS::insert:
         {
             size_t sum=0;
