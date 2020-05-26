@@ -79,7 +79,7 @@ public:
         static  bool        g_flgLibReady;        
 
         // static member functions
-        static int  SockInitLib     (short pMajorVersion = 2, short pMinorVersion = 2);
+        static int  SockInitLib     (short pMajorVersion = 1, short pMinorVersion = 1);
         static bool SockFinalizeLib (void);
 };
 
@@ -119,13 +119,15 @@ TSocketClient::TSocketClient (const char* pServer, int pPort, bool is_ssl_) : is
     // Initialize 
     int addr;
     PHOSTENT phostent = NULL;
-
+    struct addrinfo *result = NULL;
+    
     // precaution
     if ( pServer == NULL or pPort <= 0 )
         error = true;
 
     // try converting from dotted decimal form
-    addr = inet_addr (pServer);
+    inet_pton(AF_INET, pServer, &addr);
+    // addr = inet_addr (pServer);
     if (addr != (in_addr_t)INADDR_NONE) {                                       // success
         // put the addr in SOCKADDR struct
         vSockAddr.sin_addr.s_addr = addr;
@@ -133,7 +135,8 @@ TSocketClient::TSocketClient (const char* pServer, int pPort, bool is_ssl_) : is
 
     // check if local
     else if (strcmp(pServer, "(local)") == 0) {
-        addr = inet_addr ("127.0.0.1");
+        inet_pton(AF_INET, "127.0.0.1", &addr);
+        // addr = inet_addr ("127.0.0.1");
         if (addr != (in_addr_t)INADDR_NONE) {                                   // success
             // put the addr in SOCKADDR struct
             vSockAddr.sin_addr.s_addr = addr;
@@ -141,11 +144,12 @@ TSocketClient::TSocketClient (const char* pServer, int pPort, bool is_ssl_) : is
         else
             error = true;
     }
-
+ 
     // try name resolution
     else {
         // use gethosbyname function and try resolving
-        phostent = gethostbyname(pServer);
+        getaddrinfo(pServer, NULL, {}, &result);
+        // phostent = gethostbyname(pServer);
         if ( phostent  == NULL )
             error  = true;                                         // resolution failed
 
@@ -255,6 +259,7 @@ bool TSocketClient::SockCreateAndConnect ( void ) {
     iStatus = connect ( s, ( struct sockaddr* )&vSockAddr, sizeof(vSockAddr));
     if ( iStatus != 0 ) {
         puts ("*** inside connect fail\n")
+        printf ("%d", iStatus);
         #ifdef __linux__
         close(s);
         #else
