@@ -415,7 +415,7 @@ bool TSocketClient::SetErrMsg (bool flgIncludeWin32Error, const char* pszErrMsg,
     if(pszErrMsg) {
         va_list args;
         va_start (args, pszErrMsg);
-        vsprintf( vszErrMsg,pszErrMsg, args );
+        vsprintf_s( vszErrMsg,pszErrMsg, args );
         va_end (args);
 
 #ifndef __linux__
