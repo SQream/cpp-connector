@@ -1,27 +1,46 @@
-cmake_minimum_required(VERSION 3.12)
-project(SQream-cpp-connector)
+CMAKE_MINIMUM_REQUIRED(VERSION 3.17.1)
+set(CMAKE_CXX_STANDARD 20)
 
-if(NOT CMAKE_BUILD_TYPE)
-    set(CMAKE_BUILD_TYPE Release)
+project(connector LANGUAGES CXX DESCRIPTION "SQream C++ connector" HOMEPAGE_URL https://github.com/SQream/cpp-connector)
+
+set(CMAKE_CXX_COMPILER "clang++")
+include_directories (.)
+
+##[[
+if (MSVC)
+    add_compile_options(/W4)                                              # warning level 4. /WX- all warnings as errors
+else()
+    add_compile_options(-Wall -Wextra -pedantic)                          # lots of warnings  -Werror - all warnings as errors
 endif()
+#]]
 
-set(DIST_VER "system-default")
 
-set(CMAKE_CXX_FLAGS "-fPIC -Wall -Wextra -shared-libgcc -g3")
-set(CMAKE_CXX_FLAGS_DEBUG "-O0")
-set(CMAKE_CXX_FLAGS_RELEASE "-O3 -flto -DNDEBUG")
+## ----- linking requirements  ------
 
-set(CMAKE_INSTALL_RPATH "$ORIGIN")
-set(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
-set(CMAKE_CXX_STANDARD 11)
+# OpenSSL
+find_package(OpenSSL REQUIRED)
+link_libraries(OpenSSL::SSL OpenSSL::Crypto)  # Link all targets with openssl / crypto                             
 
-include_directories(/usr/local/sqream-prerequisites/versions/${DIST_VER}/include)
+# pthreads
+# set(CMAKE_THREAD_PREFER_PTHREAD ON)
+# set(THREADS_PREFER_PTHREAD_FLAG ON)
+find_package(Threads REQUIRED)
+link_libraries(Threads::Threads) # Link all targets with thread
 
-link_directories(/usr/local/sqream-prerequisites/versions/${DIST_VER}/lib64 /usr/local/sqream-prerequisites/versions/${DIST_VER}/lib)
+## ---- .so / .dll build ------
+add_library(connector SHARED ./connector.cpp)                              # Sets POSITION_INDEPENDENT_CODE as well
+set_property(TARGET connector PROPERTY INTERPROCEDURAL_OPTIMIZATION TRUE)  # -flto 
 
-add_library(sqream SHARED SQream-cpp-connector.cc)
+#! set_property(TARGET connector PROPERTY POSITION_INDEPENDENT_CODE ON)    # done automatically when setting library to SHARED
+#! set(CMAKE_POSITION_INDEPENDENT_CODE ON)   # Set -fPIC on all targets
 
-add_executable(runtime_test runtime_test.cc SQream-cpp-connector.cc SOCK/linuxSock/SocketClient.cpp)
+## ----- sample.exe build -----
+add_executable(sample ./sample.cpp ./connector.cpp)
 
-target_link_libraries(runtime_test crypto ssl boost_unit_test_framework pthread)
+## ----- tests.exe build -----
+add_executable(sq_tests ./tests/tests.cpp ./connector.cpp)
 
+
+#! Alternative for linking per target - we link ssl/crypto for all targets
+#! target_link_libraries(connector PRIVATE OpenSSL::SSL OpenSSL::Crypto)
+#! target_link_libraries(sample    PRIVATE OpenSSL::SSL OpenSSL::Crypto)
