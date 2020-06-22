@@ -1,23 +1,32 @@
-#include "SQream-cpp-connector.h"
+/* SQream C++ Connector
+*  Originally by - Benny Van-Zuiden, Jeremy Chetboul, 2018
+*/ 
 
-#include "SOCK/linuxSock/SocketClient.hpp"
-#include "rapidjson/include/rapidjson/document.h"
-#include "rapidjson/include/rapidjson/stringbuffer.h"
-#include "rapidjson/include/rapidjson/writer.h"
+#include "connector.h"
+#include "socket.hpp"
+#include "json.hpp"
+#include <exception>
 
 /// Macro to format and throw errors
 #define THROW_GENERAL_ERROR(MSG) throw std::string(__FILE__":")+std::to_string(__LINE__)+std::string(" in ")+std::string(__func__)+std::string("(): ")+std::string(MSG)
 #define THROW_SQREAM_ERROR(MSG) throw std::string(__FILE__":")+std::to_string(__LINE__)+std::string(" in ")+std::string(__func__)+std::string("() returned error from SQream: ")+std::string(MSG)
 
+// Easy prints for debugging
+#define ping puts("ping");
+#define puts(str) puts(str);
+#define putss(str) puts(str.c_str());
+#define putj(jsn) puts(jsn.dump().c_str());
+
 ///Linux-Windows snprintf variant
 #ifdef __linux__
-#define SNPRINTF snprintf
+    #define SNPRINTF snprintf
 #else
-#define SNPRINTF _snprintf
+    #define SNPRINTF _snprintf
 #endif
 
-template<typename ...Args> void sqream::MESSAGES::format(std::vector<char> &output,const char input[],Args...args)
-{
+using json = nlohmann::json;
+
+template<typename ...Args> void sqream::MESSAGES::format(std::vector<char> &output,const char input[],Args...args) {
     /// <i>sqream connector JSON message formatter</i><br>
     /// <b>input:</b>
     /// <ul>
@@ -32,55 +41,143 @@ template<typename ...Args> void sqream::MESSAGES::format(std::vector<char> &outp
     output.pop_back();
 }
 
-sqream::connection_t::connection_t()
+
+/// <i>ERR_HANDLE macro removes redundant code to check the validity of a server response</i><br>
+#define ERR_HANDLE(VALUE,JSON_TYPE)\
+{\
+    if(reply_json.contains(#VALUE)) return reply_json[#VALUE];\
+    else if(reply_json.contains("error")) THROW_SQREAM_ERROR(reply_json["error"]);\
+    else THROW_GENERAL_ERROR("an unknown error occured");\
+}
+
+/// <i>ERR_HANDLE_STR macro removes redundant code to check the validity of a server response in case the expected response is cstring</i><br>
+#define ERR_HANDLE_STR(VALUE)\
+{\
+    if(reply_json.contains(#VALUE)) return !(reply_json[#VALUE] == #VALUE);\
+    else if(reply_json.contains("error")) THROW_SQREAM_ERROR(reply_json["error"]);\
+    else THROW_GENERAL_ERROR("an unknown error occured");\
+}
+
+bool verify_response(json& reply_json, std::string value) {
+
+    if(reply_json.contains(value)) 
+        return (reply_json[value] == value);
+    else if(reply_json.contains("error")) { 
+        THROW_SQREAM_ERROR(reply_json["error"]);
+    }else {
+        puts("verify else clause");
+        putss(value)
+        puts(reply_json.dump().c_str());
+        THROW_GENERAL_ERROR("an unknown error occured");
+    }
+}
+
+
+static void rxtx(sqream::connector *conn, json& reply_json,const char input[]) ///< <h3>Method to send and receive formatted messages</h3>
 {
+    /// <i>Routine to perform a send and receive of formatted JSON messages</i><br>
+    /// <b>input:</b>
+    /// <ul>
+    /// <li>sqream::connector *conn:&emsp; Pointer to SQream low level connector type</li>
+    /// <li>json &reply_json:&emsp; JSON reply message from sqreamd</li>
+    /// <li>const char input[]:&emsp; JSON message to sqreamd</li>
+    /// </ul>
+
+    std::vector<char> reply_msg;
+    
+    conn->write(input,strlen(input),sqream::HEADER::HEADER_JSON);
+    conn->read(reply_msg);
+    
+    // add catch error - https://github.com/nlohmann/json/blob/develop/doc/examples/parse_error.cpp
+    reply_json = json::parse(std::string(reply_msg.begin(),reply_msg.end()).c_str()); // THROW_GENERAL_ERROR("could not parse server response");
+}
+
+template<typename ...Args> 
+void rxtx(sqream::connector *conn, json& reply_json,const char input[],Args...args) ///< <h3>Method to send and receive unformatted messages</h3>
+{
+    /// <i>Routine to perform a send and receive of unformatted JSON messages</i><br>
+    /// <b>input:</b>
+    /// <ul>
+    /// <li>sqream::connector *conn:&emsp; Pointer to SQream low level connector type</li>
+    /// <li>json &reply_json:&emsp; JSON reply message from sqreamd</li>
+    /// <li>const char input[]:&emsp; JSON message to sqreamd</li>
+    /// <li>Args..args:&emsp; variadic argument to format the unformatted JSON messages</li>
+    /// </ul>
+    std::vector<char> reply_msg,msg;
+    sqream::MESSAGES::format(msg,input,args...);
+    conn->write(msg.data(),msg.size(),sqream::HEADER::HEADER_JSON);
+    conn->read(reply_msg);
+    
+    // add catch error - https://github.com/nlohmann/json/blob/develop/doc/examples/parse_error.cpp
+    reply_json = json::parse(std::string(reply_msg.begin(),reply_msg.end()).c_str()); //THROW_GENERAL_ERROR("could not parse server response");
+
+}
+
+
+//         --- Connector object ----
+//         -------------------------
+
+sqream::connector::connector() {
+    /// <i>Trivial connector constructor</i><br>
+
     /// <i>ensure the socket is null pointer on object creation</i><br>
     socket=nullptr;
 }
 
-sqream::connection_t::~connection_t()
-{
-    /// <i>ensure a disconnect on object destruction</i><br>
-    disconnect();
-}
+sqream::connector::~connector() {
+   
+    /// <i>Connector destructor that automatically disconnects</i><br>
+    if(socket) {
 
-void sqream::connection_t::connect(const std::string &ipv4,int port,bool ssl)
-{
-    /// <i>connect to a sqreamd session</i><br>
-    /// <b>input:</b>
-    /// <ul>
-    /// <li>const std::string &ipv4:&emsp; ipv4 address of the sqreamd</li>
-    /// <li>int port:&emsp; port of the sqreamd</li>
-    /// </ul>
-    if(socket) disconnect();
-    socket=new(std::nothrow) TSocketClient(ipv4.c_str(),port,ssl);
-    if(socket->SockCreateAndConnect()==false)
-    {
-        socket=nullptr;
-        THROW_GENERAL_ERROR("unable to create socket");
-    }
-}
-
-void sqream::connection_t::disconnect()
-{
-    /// <i>disconnect from a sqreamd session</i><br>
-    if(socket)
-    {
+        int bytes_written;
+        const size_t data_size=strlen(MESSAGES::closeConnection);
+        const size_t block_size=HEADER::SIZE+sizeof(data_size);
+        std::vector<char> pillow(block_size+data_size);
+        memcpy(pillow.data(),HEADER::HEADER_JSON,HEADER::SIZE);
+        memcpy(&pillow[HEADER::SIZE],&data_size,sizeof(data_size));
+        memcpy(&pillow[block_size],MESSAGES::closeConnection,data_size);
+        socket->SockWriteChunk(pillow.data(),data_size+block_size,bytes_written);
+    
+        /// <i>ensure a disconnect on object destruction</i><br>
+        /// <i>disconnect from a sqreamd session</i><br>
         socket->SockClose();
         delete socket;
         socket=nullptr;
     }
 }
 
-void sqream::connection_t::read(std::vector<char> &data)
-{
+
+void sqream::connector::connect_socket(const std::string &ipv4,int port,bool ssl) {
+
+    /// <i>connect to a sqreamd session</i><br>
+    /// <b>input:</b>
+    /// <ul>
+    /// <li>const std::string &ipv4:&emsp; ipv4 address of the sqreamd</li>
+    /// <li>int port:&emsp; port of the sqreamd</li>
+    /// </ul>
+
+    if(socket) {
+        socket->SockClose();
+        delete socket;
+        socket=nullptr;
+    }
+    socket=new(std::nothrow) TSocketClient(ipv4.c_str(),port,ssl);
+
+    if(socket->SockCreateAndConnect()==false) {
+        socket=nullptr;
+        THROW_GENERAL_ERROR("unable to create socket");
+    }
+}
+
+
+void sqream::connector::read(std::vector<char> &data) {
+
     /// <i>read data sent by sqreamd</i><br>
     /// <b>input:</b>
     /// <ul>
     /// <li>std::vector<char> &data:&emsp; output buffer (automatically resized)</li>
     /// </ul>
-    if(socket)
-    {
+    if(socket) {
         char header[10];
         uint64_t data_size;
         int bytes_read;
@@ -90,11 +187,13 @@ void sqream::connection_t::read(std::vector<char> &data)
         data.resize(data_size);
         if(!socket->SockReadChunk((char*)data.data(),bytes_read,data_size)) THROW_GENERAL_ERROR("socket failed to read content");
     }
-    else THROW_GENERAL_ERROR("not connected");
+    else 
+        THROW_GENERAL_ERROR("not connected");
 }
 
-void sqream::connection_t::write(const char *data,const uint64_t data_size,const uint8_t msg_type[HEADER::SIZE])
-{
+
+void sqream::connector::write(const char *data,const uint64_t data_size,const uint8_t msg_type[HEADER::SIZE]) {
+
     /// <i>read data sent by sqreamd</i><br>
     /// <b>input:</b>
     /// <ul>
@@ -102,13 +201,10 @@ void sqream::connection_t::write(const char *data,const uint64_t data_size,const
     /// <li>const size_t data_size:&emsp; size of data to be written</li>
     /// <li>const uint8_t msg_type[HEADER::SIZE]: message type indicator</li>
     /// </ul>
-    if(socket)
-    {
-        if(data_size<CONSTS::MAX_SIZE)
-        {
+    if(socket) {
+        if(data_size<CONSTS::MAX_SIZE) {
             int bytes_written;
-            if(!memcmp((const char*)msg_type,HEADER::HEADER_JSON,HEADER::SIZE))
-            {
+            if(!memcmp((const char*)msg_type,HEADER::HEADER_JSON,HEADER::SIZE)) {
                 const size_t block_size=HEADER::SIZE+sizeof(data_size);
                 std::vector<char> pillow(block_size+data_size);
                 memcpy(pillow.data(),msg_type,HEADER::SIZE);
@@ -116,8 +212,7 @@ void sqream::connection_t::write(const char *data,const uint64_t data_size,const
                 memcpy(&pillow[block_size],data,data_size);
                 if(!socket->SockWriteChunk(pillow.data(),data_size+block_size,bytes_written)) THROW_GENERAL_ERROR("socket failed to write message block");
             }
-            else
-            {
+            else {
                 if(!socket->SockWriteChunk(msg_type,HEADER::SIZE,bytes_written)) THROW_GENERAL_ERROR("socket failed to write header");
                 if(!socket->SockWriteChunk(&data_size,sizeof(data_size),bytes_written)) THROW_GENERAL_ERROR("socket failed to write binary data size");
                 if(!socket->SockWriteChunk(data,data_size,bytes_written)) THROW_GENERAL_ERROR("socket failed to write binary data");
@@ -128,77 +223,8 @@ void sqream::connection_t::write(const char *data,const uint64_t data_size,const
     else THROW_GENERAL_ERROR("not connected");
 }
 
-sqream::connector::connector()
-{
-    /// <i>Trivial connector constructor</i><br>
-}
 
-sqream::connector::~connector()
-{
-    /// <i>Connector destructor that automatically disconnects</i><br>
-    if(host.socket)
-    {
-        int bytes_written;
-        const size_t data_size=strlen(MESSAGES::closeConnection);
-        const size_t block_size=HEADER::SIZE+sizeof(data_size);
-        std::vector<char> pillow(block_size+data_size);
-        memcpy(pillow.data(),HEADER::HEADER_JSON,HEADER::SIZE);
-        memcpy(&pillow[HEADER::SIZE],&data_size,sizeof(data_size));
-        memcpy(&pillow[block_size],MESSAGES::closeConnection,data_size);
-        host.socket->SockWriteChunk(pillow.data(),data_size+block_size,bytes_written);
-    }
-}
-
-/// <i>ERR_HANDLE macro removes redundant code to check the validity of a server response</i><br>
-#define ERR_HANDLE(VALUE,JSON_TYPE)\
-{\
-    if(reply_json.HasMember(#VALUE)) return reply_json[#VALUE].JSON_TYPE();\
-    else if(reply_json.HasMember("error")) THROW_SQREAM_ERROR(reply_json["error"].GetString());\
-    else THROW_GENERAL_ERROR("an unknown error occured");\
-}
-
-/// <i>ERR_HANDLE_STR macro removes redundant code to check the validity of a server response in case the expected response is cstring</i><br>
-#define ERR_HANDLE_STR(VALUE)\
-{\
-    if(reply_json.HasMember(#VALUE)) return !strcmp(reply_json[#VALUE].GetString(),#VALUE);\
-    else if(reply_json.HasMember("error")) THROW_SQREAM_ERROR(reply_json["error"].GetString());\
-    else THROW_GENERAL_ERROR("an unknown error occured");\
-}
-
-static void rxtx(sqream::connector *conn,rapidjson::Document *reply_json,const char input[]) ///< <h3>Method to send and receive formatted messages</h3>
-{
-    /// <i>Routine to perform a send and receive of formatted JSON messages</i><br>
-    /// <b>input:</b>
-    /// <ul>
-    /// <li>sqream::connector *conn:&emsp; Pointer to SQream low level connector type</li>
-    /// <li>rapidjson::Document &reply_json:&emsp; JSON reply message from sqreamd</li>
-    /// <li>const char input[]:&emsp; JSON message to sqreamd</li>
-    /// </ul>
-    std::vector<char> reply_msg;
-    conn->host.write(input,strlen(input),sqream::HEADER::HEADER_JSON);
-    conn->host.read(reply_msg);
-    if(!((rapidjson::ParseResult)reply_json->Parse(std::string(reply_msg.begin(),reply_msg.end()).c_str()))) THROW_GENERAL_ERROR("could not parse server response");
-}
-
-template<typename ...Args> void rxtx(sqream::connector *conn,rapidjson::Document *reply_json,const char input[],Args...args) ///< <h3>Method to send and receive unformatted messages</h3>
-{
-    /// <i>Routine to perform a send and receive of unformatted JSON messages</i><br>
-    /// <b>input:</b>
-    /// <ul>
-    /// <li>sqream::connector *conn:&emsp; Pointer to SQream low level connector type</li>
-    /// <li>rapidjson::Document &reply_json:&emsp; JSON reply message from sqreamd</li>
-    /// <li>const char input[]:&emsp; JSON message to sqreamd</li>
-    /// <li>Args..args:&emsp; variadic argument to format the unformatted JSON messages</li>
-    /// </ul>
-    std::vector<char> reply_msg,msg;
-    sqream::MESSAGES::format(msg,input,args...);
-    conn->host.write(msg.data(),msg.size(),sqream::HEADER::HEADER_JSON);
-    conn->host.read(reply_msg);
-    if(!((rapidjson::ParseResult)reply_json->Parse(std::string(reply_msg.begin(),reply_msg.end()).c_str()))) THROW_GENERAL_ERROR("could not parse server response");
-}
-
-bool sqream::connector::connect(const std::string &ipv4,int port,bool ssl,const std::string &username,const std::string &password,const std::string &database,const std::string &service)
-{
+bool sqream::connector::connect(const std::string &ipv4,int port,bool ssl,const std::string &username,const std::string &password,const std::string &database,const std::string &service) {
     /// <i>Connector routine that connects to a given ipv4, port, database on sqreamd</i><br>
     /// <b>input:</b>
     /// <ul>
@@ -210,9 +236,10 @@ bool sqream::connector::connect(const std::string &ipv4,int port,bool ssl,const 
     /// <li>const std::string &database:&emsp; database name</li>
     /// </ul>
     /// <b>return</b>(uint32_t):&emsp; connection_id
-    host.connect(ipv4,port,ssl);
-    rapidjson::Document reply_json;
-    rxtx(this,&reply_json,MESSAGES::connectDatabase,service.c_str(),username.c_str(),password.c_str(),database.c_str());
+    connect_socket(ipv4,port,ssl);
+
+    json reply_json;
+    rxtx(this, reply_json, MESSAGES::connectDatabase, service.c_str(), username.c_str(), password.c_str(), database.c_str());
     ipv4_=ipv4;
     port_=port;
     ssl_=ssl;
@@ -221,45 +248,41 @@ bool sqream::connector::connect(const std::string &ipv4,int port,bool ssl,const 
     database_=database;
     service_=service;
     var_encoding_= "ascii";
+    if(reply_json.contains("varcharEncoding")) 
+        var_encoding_ = reply_json["varcharEncoding"];          // std::string var_encoding_
 
-    if(reply_json.HasMember("varcharEncoding"))
-    {
-        var_encoding_=reply_json["varcharEncoding"].GetString();
-    }
-
-    if(reply_json.HasMember("connectionId"))
-    {
-        connection_id_=reply_json["connectionId"].GetUint();
+    if(reply_json.contains("connectionId")) {
+        connection_id_ = reply_json["connectionId"];  // uint32_t connection_id_
         return true;
     }
-    else return false;
+    else 
+        return false;
 }
 
-bool sqream::connector::reconnect(const std::string &ipv4,int port,int listener_id)
-{
-    host.connect(ipv4,port,ssl_);
-    rapidjson::Document reply_json;
-    rxtx(this,&reply_json,MESSAGES::reconnectDatabase,database_.c_str(),service_.c_str(),connection_id_,username_.c_str(),password_.c_str(),listener_id);
-    if(reply_json.HasMember("databaseConnected")) return true;
-    else return false;
+bool sqream::connector::reconnect(const std::string &ipv4,int port,int listener_id) {
+
+    connect_socket(ipv4,port,ssl_);
+    json reply_json;
+    rxtx(this, reply_json,MESSAGES::reconnectDatabase,database_.c_str(),service_.c_str(),connection_id_,username_.c_str(),password_.c_str(),listener_id);
+    
+    return reply_json.contains("databaseConnected");
 }
 
-bool sqream::connector::open_statement()
-{
+
+bool sqream::connector::open_statement() {
     /// <i>Connector routine that opens a new statement on sqreamd</i><br>
     /// <b>return</b>(uint32_t):&emsp; statement_id
-    rapidjson::Document reply_json;
-    rxtx(this,&reply_json,MESSAGES::getStatementId);
-    if(reply_json.HasMember("statementId"))
-    {
-        statement_id_=reply_json["statementId"].GetUint();
+    json reply_json;
+    rxtx(this, reply_json,MESSAGES::getStatementId);
+    if(reply_json.contains("statementId")) {
+        statement_id_=reply_json["statementId"];
         return true;
     }
-    else return false;
+    else 
+        return false;
 }
 
-bool sqream::connector::prepare_statement(std::string sqlQuery,int chunk_size)
-{
+bool sqream::connector::prepare_statement(std::string sqlQuery,int chunk_size) {
     /// <i>Connector routine that prepares a statement on sqreamd</i><br>
     /// <b>input:</b>
     /// <ul>
@@ -267,33 +290,25 @@ bool sqream::connector::prepare_statement(std::string sqlQuery,int chunk_size)
     /// <li>int chunk_size:&emsp; this parameter is unparsed</li>
     /// </ul>
     /// <b>return</b>(bool):&emsp; success from server
-    rapidjson::Document reply_json;
+    json reply_json, prepare_json;
+    prepare_json["prepareStatement"] = sqlQuery;
+    prepare_json["chunkSize"] = chunk_size;
+	rxtx(this, reply_json, prepare_json.dump().c_str());
 
-	rapidjson::StringBuffer stringifyed;
-	rapidjson::Writer<rapidjson::StringBuffer> writer(stringifyed);
-	writer.StartObject();
-	writer.Key("prepareStatement");
-	writer.String(sqlQuery.c_str());
-	writer.Key("chunkSize");
-	writer.Int(chunk_size);
-	writer.EndObject();
-
-	rxtx(this, &reply_json, std::string(stringifyed.GetString(), stringifyed.GetLength()).c_str());
-
-    if(reply_json.HasMember("reconnect") and (reply_json["reconnect"].GetBool()==true))
-    {
-
-        if((reply_json.HasMember("port") or reply_json.HasMember("port_ssl")) and reply_json.HasMember("ip") and reply_json.HasMember("listener_id"))
-        {
-            const int port=ssl_?reply_json["port_ssl"].GetUint():reply_json["port"].GetUint();
-            if(reconnect(reply_json["ip"].GetString(),port,reply_json["listener_id"].GetUint()));
+    if(reply_json.contains("reconnect") and (reply_json["reconnect"] == true)) {     
+        if((reply_json.contains("port") or reply_json.contains("port_ssl")) and reply_json.contains("ip") and reply_json.contains("listener_id")) {
+            const int port = ssl_ ? reply_json["port_ssl"] : reply_json["port"];
+            if(reconnect(reply_json["ip"], port, reply_json["listener_id"]));
             else THROW_GENERAL_ERROR("reconnection failed");
         }
         else THROW_GENERAL_ERROR("could not parse reconnection message");
-        rxtx(this,&reply_json,MESSAGES::reconstructStatement,statement_id_);
-        ERR_HANDLE_STR(statementReconstructed)
+        rxtx(this, reply_json, MESSAGES::reconstructStatement,statement_id_);
+        // ERR_HANDLE_STR(statementReconstructed)
+        return verify_response(reply_json, "statementReconstructed");
     }
-    else ERR_HANDLE(statementPrepared,GetBool)
+    else { 
+        ERR_HANDLE(statementPrepared,GetBool)
+    }
 }
 
 sqream::CONSTS::statement_type sqream::connector::metadata_query(std::vector<column> &columns_metadata_in,std::vector<column> &columns_metadata_out)
@@ -313,25 +328,25 @@ sqream::CONSTS::statement_type sqream::connector::metadata_query(std::vector<col
     columns_metadata_out.clear();
     columns_metadata_in.clear();
     CONSTS::statement_type retval=CONSTS::statement_type::unset;
-    rapidjson::Document queryTypeOut_reply_json;
-    rxtx(this,&queryTypeOut_reply_json,MESSAGES::queryTypeOut);
-    if(queryTypeOut_reply_json.HasMember("queryTypeNamed") and queryTypeOut_reply_json["queryTypeNamed"].IsArray() and queryTypeOut_reply_json["queryTypeNamed"].Size())
+    json queryTypeOut_reply_json;
+    rxtx(this, queryTypeOut_reply_json,MESSAGES::queryTypeOut);
+    if(queryTypeOut_reply_json.contains("queryTypeNamed") and queryTypeOut_reply_json["queryTypeNamed"].is_array() and queryTypeOut_reply_json["queryTypeNamed"].size())
     {
         retval=CONSTS::statement_type::select;
-        columns_metadata_out.resize(queryTypeOut_reply_json["queryTypeNamed"].Size());
-        const rapidjson::Value &out_array=queryTypeOut_reply_json["queryTypeNamed"].GetArray();
-        const rapidjson::SizeType I=out_array.Size();
-        for(rapidjson::SizeType i=0;i<I;i++)
+        columns_metadata_out.resize(queryTypeOut_reply_json["queryTypeNamed"].size());
+        const json &out_array = queryTypeOut_reply_json["queryTypeNamed"];
+        auto out_size = out_array.size();
+        for(json::size_type i=0; i<out_size ;i++)
         {
             uint8_t checksum=0;
-            if(out_array[i].HasMember("isTrueVarChar")) columns_metadata_out[i].is_true_varchar=out_array[i]["isTrueVarChar"].GetBool(),checksum|=1;
-            if(out_array[i].HasMember("nullable")) columns_metadata_out[i].nullable=out_array[i]["nullable"].GetBool(),checksum|=2;
-            if(out_array[i].HasMember("name")) columns_metadata_out[i].name=std::string(out_array[i]["name"].GetString()),checksum|=4;
-            if(out_array[i].HasMember("type") and out_array[i]["type"].IsArray() and out_array[i]["type"].Size()==3)
+            if(out_array[i].contains("isTrueVarChar")) columns_metadata_out[i].is_true_varchar = out_array[i]["isTrueVarChar"], checksum|=1;
+            if(out_array[i].contains("nullable")) columns_metadata_out[i].nullable = out_array[i]["nullable"], checksum|=2;
+            if(out_array[i].contains("name")) columns_metadata_out[i].name=std::string(out_array[i]["name"]), checksum|=4;
+            if(out_array[i].contains("type") and out_array[i]["type"].is_array() and out_array[i]["type"].size()==3)
             {
-                columns_metadata_out[i].type=std::string(out_array[i]["type"][0].GetString());
-                columns_metadata_out[i].size=out_array[i]["type"][1].GetUint();
-                columns_metadata_out[i].scale=out_array[i]["type"][2].GetUint();
+                columns_metadata_out[i].type=std::string(out_array[i]["type"][0]);
+                columns_metadata_out[i].size=out_array[i]["type"][1];
+                columns_metadata_out[i].scale=out_array[i]["type"][2];
                 checksum|=8;
             }
             if(checksum!=15) THROW_GENERAL_ERROR("could not parse metadata out");
@@ -339,24 +354,23 @@ sqream::CONSTS::statement_type sqream::connector::metadata_query(std::vector<col
     }
     else
     {
-        rapidjson::Document queryTypeIn_reply_json;
-        rxtx(this,&queryTypeIn_reply_json,MESSAGES::queryTypeIn);
-        if(queryTypeIn_reply_json.HasMember("queryType") and queryTypeIn_reply_json["queryType"].IsArray() and queryTypeIn_reply_json["queryType"].Size())
+        json queryTypeIn_reply_json;
+        rxtx(this, queryTypeIn_reply_json,MESSAGES::queryTypeIn);
+        if(queryTypeIn_reply_json.contains("queryType") and queryTypeIn_reply_json["queryType"].is_array() and queryTypeIn_reply_json["queryType"].size())
         {
             retval=CONSTS::statement_type::insert;
-            columns_metadata_in.resize(queryTypeIn_reply_json["queryType"].Size());
-            const rapidjson::Value &in_array=queryTypeIn_reply_json["queryType"].GetArray();
-            const rapidjson::SizeType I=in_array.Size();
-            for(rapidjson::SizeType i=0;i<I;i++)
+            columns_metadata_in.resize(queryTypeIn_reply_json["queryType"].size());
+            const json &in_array = queryTypeIn_reply_json["queryType"];
+            for(size_t i=0; i<in_array.size(); i++)
             {
                 uint8_t checksum=0;
-                if(in_array[i].HasMember("isTrueVarChar")) columns_metadata_in[i].is_true_varchar=in_array[i]["isTrueVarChar"].GetBool(),checksum|=1;
-                if(in_array[i].HasMember("nullable")) columns_metadata_in[i].nullable=in_array[i]["nullable"].GetBool(),checksum|=2;
-                if(in_array[i].HasMember("type") and in_array[i]["type"].IsArray() and in_array[i]["type"].Size()==3)
+                if(in_array[i].contains("isTrueVarChar")) columns_metadata_in[i].is_true_varchar = in_array[i]["isTrueVarChar"], checksum|=1;
+                if(in_array[i].contains("nullable")) columns_metadata_in[i].nullable = in_array[i]["nullable"], checksum|=2;
+                if(in_array[i].contains("type") and in_array[i]["type"].is_array() and in_array[i]["type"].size()==3)
                 {
-                    columns_metadata_in[i].type=std::string(in_array[i]["type"][0].GetString());
-                    columns_metadata_in[i].size=in_array[i]["type"][1].GetUint();
-                    columns_metadata_in[i].scale=in_array[i]["type"][2].GetUint();
+                    columns_metadata_in[i].type=std::string(in_array[i]["type"][0]);
+                    columns_metadata_in[i].size=in_array[i]["type"][1];
+                    columns_metadata_in[i].scale=in_array[i]["type"][2];
                     checksum|=4;
                 }
                 if(checksum!=7) THROW_GENERAL_ERROR("could not parse metadata in");
@@ -371,9 +385,14 @@ bool sqream::connector::execute()
 {
     /// <i>Connector routine that tells the server to execute a statement</i><br>
     /// <b>return</b>(bool):&emsp; success response from sqreamd
-    rapidjson::Document reply_json;
-    rxtx(this,&reply_json,MESSAGES::execute);
-    ERR_HANDLE_STR(executed)
+    json reply_json;
+    rxtx(this, reply_json,MESSAGES::execute);
+
+    // ERR_HANDLE_STR(executed)
+    bool res = verify_response(reply_json, "executed");
+    return res;
+    // puts ("execute end");
+
 }
 
 size_t sqream::connector::fetch(std::vector<char> &binary_data,std::vector<uint64_t> &column_sizes,size_t min_size)
@@ -385,34 +404,36 @@ size_t sqream::connector::fetch(std::vector<char> &binary_data,std::vector<uint6
     /// <li>size_t min_size=1:&emsp; keep retrieving until at least size of bytes is retrieved (default value is 1)</li>
     /// </ul>
     /// <b>return</b>(size_t):&emsp; number of rows
-    rapidjson::Document reply_json;
+    json reply_json;
     binary_data.resize(0);
     column_sizes.resize(0);
     size_t row_count=0;
     while(binary_data.size()<min_size)
     {
-        rxtx(this,&reply_json,MESSAGES::fetch);
-        if(reply_json.HasMember("colSzs") and reply_json.HasMember("rows"))
+        rxtx(this, reply_json,MESSAGES::fetch);
+        if(reply_json.contains("colSzs") and reply_json.contains("rows"))
         {
-            if(reply_json["colSzs"].IsArray() and reply_json["colSzs"].Size())
+            if(reply_json["colSzs"].is_array() and reply_json["colSzs"].size())
             {
-                row_count+=reply_json["rows"].GetUint();
-                const rapidjson::Value &array=reply_json["colSzs"].GetArray();
-                const rapidjson::SizeType I=array.Size();
-                if(column_sizes.size()!=I) column_sizes.resize(I);
+                row_count += int(reply_json["rows"]);
+                const json &array = reply_json["colSzs"];
+                const auto I = array.size();
+                if(column_sizes.size() != I) column_sizes.resize(I);
                 size_t binary_size=0;
-                for(rapidjson::SizeType i=0;i<I;i++) binary_size+=column_sizes[i]=array[i].GetUint();
+                for(json::size_type i=0; i<I ;i++) {
+                    binary_size += column_sizes[i] = array[i];
+                }
                 if(binary_size>0)
-                {
+                {       
                     std::vector<char> temp(binary_size);
-                    host.read(temp);
+                    read(temp);
                     binary_data.insert(binary_data.end(),temp.begin(),temp.end());
                 }
                 else break;
             }
             else break;
         }
-        else if(reply_json.HasMember("error")) THROW_SQREAM_ERROR(reply_json["error"].GetString());
+        else if(reply_json.contains("error")) THROW_SQREAM_ERROR(reply_json["error"]);
         else THROW_GENERAL_ERROR("sqream::connector::fetch: an unknown error occured");
     }
     return row_count;
@@ -427,52 +448,60 @@ void sqream::connector::put(std::vector<char> &binary_data,size_t rows)
     /// <li>size_t rows:&emsp; number of rows that the input data buffer contains</li>
     /// </ul>
     std::vector<char> msg,reply_msg;
-    rapidjson::Document reply_json;
+    json reply_json;
     MESSAGES::format(msg,MESSAGES::put,rows);
-    host.write(msg.data(),msg.size(),HEADER::HEADER_JSON);
-    host.write(binary_data.data(),binary_data.size(),HEADER::HEADER_BINARY);
-    host.read(reply_msg);
-    if(!((rapidjson::ParseResult)reply_json.Parse(std::string(reply_msg.begin(),reply_msg.end()).c_str()))) THROW_GENERAL_ERROR("could not parse response");
-    if(reply_json.HasMember("putted") and !strcmp(reply_json["putted"].GetString(),"putted")) return;
-    else if(reply_json.HasMember("error")) THROW_SQREAM_ERROR(reply_json["error"].GetString());
-    else THROW_GENERAL_ERROR("sqream::connector::put: an unknown error occured");
+    write(msg.data(),msg.size(),HEADER::HEADER_JSON);
+    write(binary_data.data(),binary_data.size(),HEADER::HEADER_BINARY);
+    read(reply_msg);
+    reply_json = json::parse(std::string(reply_msg.begin(),reply_msg.end()).c_str());
+    if(reply_json.contains("putted") and (reply_json["putted"] == "putted")) 
+        return;
+    else if(reply_json.contains("error")) 
+        THROW_SQREAM_ERROR(reply_json["error"]);
+    else 
+        THROW_GENERAL_ERROR("sqream::connector::put: an unknown error occured");
 }
 
 bool sqream::connector::close_statement()
 {
     /// <i>Connector routine that closes a statement indicating it will not be used again</i><br>
     /// <b>return</b>(bool):&emsp; success response from sqreamd
-    rapidjson::Document reply_json;
-    rxtx(this,&reply_json,MESSAGES::closeStatement);
-    ERR_HANDLE_STR(statementClosed)
+    json reply_json;
+    rxtx(this, reply_json,MESSAGES::closeStatement);
+    // ERR_HANDLE_STR(statementClosed)
+    return verify_response(reply_json, "statementClosed");
 }
 
 #undef ERR_HANDLE
 #undef ERR_HANDLE_STR
 
-sqream::driver::driver()
-{
+
+//   ----  Driver object
+//   -------------------
+
+sqream::driver::driver() {
+
     /// <i>Trivial connector constructor</i><br>
     statement_type_=CONSTS::unset;
     sqc_=nullptr;
     buffer_switch_th.reset(nullptr);
     buffer_.reserve(CONSTS::MIN_PUT_SIZE);
+//*
 #ifndef __linux__
-    sqc_->host.socket->SockInitLib();
+    sqc_->socket->SockInitLib();
 #endif
+//*/
 }
 
 sqream::driver::~driver()
 {
     /// <i>Destructor that closes a statement if available and disconnects from sqreamd</i><br>
-    if(buffer_switch_th)
-    {
+    if(buffer_switch_th) {
         //std::printf("Ending previous buff switch\n");
         (*buffer_switch_th).get();
         buffer_switch_th.reset(nullptr);
     }
-    if(state_>0 and state_<7 and sqc_->host.socket)
-    {
+    if(state_>0 and state_<7 and sqc_->socket) {
         int bytes_read_write;
         const size_t data_size=strlen(MESSAGES::closeStatement);
         const size_t block_size=HEADER::SIZE+sizeof(data_size);
@@ -480,22 +509,21 @@ sqream::driver::~driver()
         memcpy(pillow.data(),HEADER::HEADER_JSON,HEADER::SIZE);
         memcpy(&pillow[HEADER::SIZE],&data_size,sizeof(data_size));
         memcpy(&pillow[block_size],MESSAGES::closeStatement,data_size);
-        sqc_->host.socket->SockWriteChunk(pillow.data(),data_size+block_size,bytes_read_write);
+        sqc_->socket->SockWriteChunk(pillow.data(),data_size+block_size,bytes_read_write);
         char header[10];
         uint64_t data_size_out;
-        sqc_->host.socket->SockReadChunk(header,bytes_read_write,sizeof(header));
+        sqc_->socket->SockReadChunk(header,bytes_read_write,sizeof(header));
         memcpy(&data_size_out,&header[2],sizeof(uint64_t));
         std::vector<char> data(data_size);
-        sqc_->host.socket->SockReadChunk((char*)data.data(),bytes_read_write,data_size);
+        sqc_->socket->SockReadChunk((char*)data.data(),bytes_read_write,data_size);
     }
     disconnect();
 #ifndef __linux__
-    sqc_->host.socket->SockFinalizeLib();
+    sqc_->socket->SockFinalizeLib();
 #endif
 }
 
-bool sqream::driver::connect(const std::string &ipv4,int port,bool ssl,const std::string &username,const std::string &password,const std::string &database,const std::string &service)
-{
+bool sqream::driver::connect(const std::string &ipv4,int port,bool ssl,const std::string &username,const std::string &password,const std::string &database,const std::string &service) {
     /// <i>Connector routine that connects to a given ipv4, port, database on sqreamd</i><br>
     /// <b>input:</b>
     /// <ul>
@@ -507,18 +535,18 @@ bool sqream::driver::connect(const std::string &ipv4,int port,bool ssl,const std
     /// <li>const std::string &database:&emsp; database name</li>
     /// </ul>
     /// <b>return</b>(bool):&emsp; successful
-    if(sqc_) disconnect();
+    if(sqc_) 
+        disconnect();
     sqc_=new(std::nothrow) connector;
-    if(!sqc_) THROW_GENERAL_ERROR("error creating connection");
-    bool retval=sqc_->connect(ipv4,port,ssl,username,password,database,service);
-    return retval;
+    if(!sqc_) 
+        THROW_GENERAL_ERROR("error creating connection");
+
+    return sqc_->connect(ipv4,port,ssl,username,password,database,service);
 }
 
-void sqream::driver::disconnect()
-{
+void sqream::driver::disconnect() {
     /// <i>Disconnect from sqreamd</i><br>
-    if(sqc_)
-    {
+    if(sqc_) {
         delete sqc_;
         sqc_=nullptr;
     }
@@ -539,8 +567,7 @@ void sqream::driver::disconnect()
 /// Combinator of TC, CS and CI macros
 #define TCCSCI(X,Y,Z) TC(X) CS(Y) CI(Z)
 
-size_t sqream::driver::flat_size_()
-{
+size_t sqream::driver::flat_size_() {
     /// <i>Size of the flat buffer when a unflat pbuffer is converted to it</i><br>
     /// <b>return</b>(size_t):&emsp; size of flat buffer
     size_t retval=0;
@@ -548,8 +575,7 @@ size_t sqream::driver::flat_size_()
     return retval;
 }
 
-void sqream::driver::init_pbuffer_(const std::vector<column> &metadata)
-{
+void sqream::driver::init_pbuffer_(const std::vector<column> &metadata) {
     /// <i>Initialize the unflat pbuffer based on a metadata vector</i><br>
     /// <b>input:</b>
     /// <ul>
@@ -571,14 +597,12 @@ void sqream::driver::init_pbuffer_(const std::vector<column> &metadata)
     }
 }
 
-void sqream::driver::flatten_(std::vector<std::vector<std::vector<char>>> &buff_to_flatten)
-{
+void sqream::driver::flatten_(std::vector<std::vector<std::vector<char>>> &buff_to_flatten) {
     /// <i>Append unflat pbuffer to flat buffer</i><br>
     for(std::vector<std::vector<char>> &cols:buff_to_flatten) for(std::vector<char> &col:cols) buffer_.insert(buffer_.end(),col.begin(),col.end());
 }
 
-void sqream::driver::unflatten_()
-{
+void sqream::driver::unflatten_() {
     /// <i>Append flat buffer to unflat pbuffer</i><br>
     size_t pos=0,k=0;
     const size_t I=pbuffer_[curr_buff_idx].size();
@@ -595,8 +619,7 @@ void sqream::driver::unflatten_()
     }
 }
 
-void sqream::driver::reset_pbuffer_(const std::vector<column> &metadata)
-{
+void sqream::driver::reset_pbuffer_(const std::vector<column> &metadata) {
     for(auto &cols:(pbuffer_[curr_buff_idx])) for(auto &col:cols) col.clear();
 
     const size_t I=metadata.size();
@@ -605,8 +628,7 @@ void sqream::driver::reset_pbuffer_(const std::vector<column> &metadata)
     for(size_t i=0;i<I;i++) blob_shift_[curr_buff_idx][i].fill(0);
 }
 
-void sqream::driver::put_buff(size_t row_cnt, int buff_idx)
-{
+void sqream::driver::put_buff(size_t row_cnt, int buff_idx) {
     std::unique_lock<std::mutex> lock(buff_switch_mut);
     //std::printf("Will switch from buffer '%d'\n", buff_idx);
     flatten_(pbuffer_[buff_idx]);
@@ -615,8 +637,8 @@ void sqream::driver::put_buff(size_t row_cnt, int buff_idx)
     buffer_.clear();
 }
 
-void sqream::driver::new_query(const std::string &sql_query)
-{
+void sqream::driver::new_query(const std::string &sql_query) {
+
     /// <i>This function creates a new statement and deduces its type and metadata</i><br>
     /// <b>input:</b>
     /// <ul>
@@ -627,16 +649,17 @@ void sqream::driver::new_query(const std::string &sql_query)
     row_count_=0;
     current_row_=0;
     curr_buff_idx = 0;
+
     buffer_.clear();
     column_sizes_.clear();
     colck_.clear();
     sqc_->open_statement();
     if(!sqc_->prepare_statement(sql_query,57/*Grothendieck prime*/)) THROW_GENERAL_ERROR("error preparing statement");
     state_|=1;
+
 }
 
-bool sqream::driver::execute_query()
-{
+bool sqream::driver::execute_query() {
     /// <i>This function tells the sqreamd server to start executing the newly generated query</i><br>
     /// This function can only be executed after a valid new_query() call<br>
     /// <b>input:</b>
@@ -644,13 +667,11 @@ bool sqream::driver::execute_query()
     /// <li>const std::string &sql_query:&emsp; SQream SQL Query</li>
     /// </ul>
     TCCS(sqc_,1)
-    if(sqc_->execute())
-    {
+    if(sqc_->execute()) {
         statement_type_=sqc_->metadata_query(metadata_input_,metadata_output_);
-        switch(statement_type_)
-        {
-            case CONSTS::insert:
-            {
+        
+        switch(statement_type_) {
+            case CONSTS::insert: {
                 init_pbuffer_(metadata_input_);
                 colck_.resize(metadata_input_.size(),0);
             }
@@ -661,11 +682,13 @@ bool sqream::driver::execute_query()
         state_|=2;
         return true;
     }
-    else THROW_GENERAL_ERROR("failed to execute query");
+    else 
+        THROW_GENERAL_ERROR("failed to execute query");
 }
 
-bool sqream::driver::next_query_row(const size_t min_put_size)
-{
+
+bool sqream::driver::next_query_row(const size_t min_put_size) {
+
     /// <i>This driver retrieves or sends data per row</i><br>
     /// This function can only be executed after a execute_query() call<br>
     /// <b>input:</b>
@@ -673,8 +696,7 @@ bool sqream::driver::next_query_row(const size_t min_put_size)
     /// <li>const size_t &min_put_size:&emsp; minimal size of the binary data black to be sent</li>
     /// </ul>
     TCCS(sqc_,3)
-    switch(statement_type_)
-    {
+    switch(statement_type_) {
         case CONSTS::insert:
         {
             size_t sum=0;
@@ -730,23 +752,22 @@ bool sqream::driver::next_query_row(const size_t min_put_size)
     }
 }
 
-bool sqream::driver::finish_query()
-{
+bool sqream::driver::finish_query() {
     /// <i>This driver retrieves or sends data per row</i><br>
     /// This function can only be executed after a execute_query() call
     if(state_==3) state_|=4;
     TCCS(sqc_,7)
-    if(statement_type_==CONSTS::insert)
-    {
-        if(buffer_switch_th)
-        {
+    if(statement_type_==CONSTS::insert) {
+        if(buffer_switch_th) {
             //std::printf("Ending previous buff switch\n");
             (*buffer_switch_th).get();
             buffer_switch_th.reset(nullptr);
         }
-        if(flat_size_())
+        if(flat_size_()) {
             put_buff(row_count_, curr_buff_idx.load());
+        }
     }
+
     state_|=8;
     return sqc_->close_statement();
 }
@@ -1331,8 +1352,8 @@ uint64_t sqream::datetime_t::get()
     return (((uint64_t)date.get())<<32)+3600000*hour+60000*minute+1000*second+millisecond;
 }
 
-void sqream::datetime_t::set(uint64_t datetime)
-{
+void sqream::datetime_t::set(uint64_t datetime) {
+
     date_t date;
     date.set((uint32_t)(datetime>>32));
     year=date.year;
@@ -1346,8 +1367,9 @@ void sqream::datetime_t::set(uint64_t datetime)
     if(!validate()) THROW_GENERAL_ERROR("invalid datetime format was set");
 }
 
-bool sqream::datetime_t::validate()
-{
+
+bool sqream::datetime_t::validate() {
+
     date_t date;
     date.set((uint32_t)(this->get()>>32));
     if(!date.validate()) return false;
@@ -1358,8 +1380,9 @@ bool sqream::datetime_t::validate()
     return true;
 }
 
-uint32_t sqream::date(int32_t year,int32_t month,int32_t day)
-{
+
+uint32_t sqream::date(int32_t year,int32_t month,int32_t day) {
+
     date_t d;
     d.year=year;
     d.month=month;
@@ -1367,8 +1390,9 @@ uint32_t sqream::date(int32_t year,int32_t month,int32_t day)
     return d.get();
 }
 
-uint64_t sqream::datetime(int32_t year,int32_t month,int32_t day,int32_t hour,int32_t minute,int32_t second,int32_t millisecond)
-{
+
+uint64_t sqream::datetime(int32_t year,int32_t month,int32_t day,int32_t hour,int32_t minute,int32_t second,int32_t millisecond) {
+   
     datetime_t dt;
     dt.year=year;
     dt.month=month;
@@ -1380,22 +1404,22 @@ uint64_t sqream::datetime(int32_t year,int32_t month,int32_t day,int32_t hour,in
     return dt.get();
 }
 
-sqream::date_t sqream::make_date(uint32_t date)
-{
+sqream::date_t sqream::make_date(uint32_t date) {
+
     date_t retval;
     retval.set(date);
     return retval;
 }
 
-sqream::datetime_t sqream::make_datetime(uint64_t datetime)
-{
+sqream::datetime_t sqream::make_datetime(uint64_t datetime) {
+
     datetime_t retval;
     retval.set(datetime);
     return retval;
 }
 
-void sqream::new_query_execute(driver *drv,std::string sql_query)
-{
+
+void sqream::new_query_execute(driver *drv, std::string sql_query) {
     /// <i>operates the protocol using a connector driver to prepare and execute a query but stops before closing to permit fetching or putting (enables networking insert)</i><br>
     /// <b>input:</b>
     /// <ul>
@@ -1403,8 +1427,7 @@ void sqream::new_query_execute(driver *drv,std::string sql_query)
     /// <li>driver &col:&emsp; column index</li>
     /// </ul>
     TC(drv->sqc_)
-    try
-    {
+    try{
         drv->new_query(sql_query);
         drv->execute_query();
     }
@@ -1416,25 +1439,23 @@ void sqream::new_query_execute(driver *drv,std::string sql_query)
     }
 }
 
-void sqream::run_direct_query(driver *drv,std::string sql_query)
-{
-    if(drv)
-    {
-        try
-        {
-            new_query_execute(drv,sql_query);
-            drv->finish_query();
-        }
-        catch(std::string &err)
-        {
-            THROW_GENERAL_ERROR(err.c_str());
-        }
+
+void sqream::run_direct_query(driver *drv,std::string sql_query) {
+    
+    if(not drv) 
+        THROW_GENERAL_ERROR("sqream driver is not initialized");
+
+    try {
+        new_query_execute(drv,sql_query);
+        drv->finish_query();
     }
-    else THROW_GENERAL_ERROR("sqream driver is not initialized");
+    catch(std::string &err) {
+        THROW_GENERAL_ERROR(err.c_str());
+    }
 }
 
-std::vector<sqream::column> sqream::get_metadata(driver *drv)
-{
+
+std::vector<sqream::column> sqream::get_metadata(driver *drv) {
 
     if(!drv->sqc_) THROW_GENERAL_ERROR("sqream driver is not connected");
     if(drv->state_<1) THROW_GENERAL_ERROR("no metadata has been retrieved at this stage");
@@ -1448,15 +1469,17 @@ std::vector<sqream::column> sqream::get_metadata(driver *drv)
     return retval;
 }
 
-uint32_t sqream::retrieve_statement_id(driver *drv)
-{
+
+uint32_t sqream::retrieve_statement_id(driver *drv) {
+
     if(!drv->sqc_) THROW_GENERAL_ERROR("sqream driver is not connected");
     if(drv->state_<1) THROW_GENERAL_ERROR("no statement id has been retrieved at this stage");
     return drv->sqc_->statement_id_;
 }
 
-sqream::CONSTS::statement_type sqream::retrieve_statement_type(driver *drv)
-{
+
+sqream::CONSTS::statement_type sqream::retrieve_statement_type(driver *drv) {
+
     if(!drv->sqc_) THROW_GENERAL_ERROR("sqream driver is not connected");
     if(drv->state_<3) THROW_GENERAL_ERROR("no statement type has been retrieved at this stage");
     return drv->statement_type_;
@@ -1464,4 +1487,3 @@ sqream::CONSTS::statement_type sqream::retrieve_statement_type(driver *drv)
 
 #undef THROW_GENERAL_ERROR
 #undef THROW_SQREAM_ERROR
-
